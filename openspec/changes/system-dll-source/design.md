@@ -44,6 +44,8 @@
    - `system_libraries.json` holds `categories` for each library. This is what the library contains, used in the sidebar description. It also holds `default_categories`, which are applied to uncurated entries.
    - `system_icon_tags.json` maps `library -> id -> {name, categories, tags}` for well-known imageres and shell32 IDs. These were curated by visually inspecting the icons rendered to the ignored `data/` scratch directory.
    - Curated categories replace the defaults. Every entry's tags include the library name, the ID and the lower-cased categories.
+   - Both files live in `catalog/system_data/`, not `catalog/data/`. The repository's `.gitignore` pattern `data/` would otherwise exclude them from git and from the hatch wheel.
+   - On this machine, all 233 curated imageres IDs and all 206 curated shell32 IDs are present.
    - No image heuristic is used. Curation plus library defaults was judged precise enough, and a colour or shape heuristic would mislabel too often.
 9. **Lifecycle and threading.** A `PeModule` holds the HMODULE and an `RLock`. The source opens it lazily on the first `entries()` or `render()` call. A warm cache start does not load the module until the first render. `close()` frees the module and is idempotent; a later render reopens it. `build_system_sources()` returns only the sources whose files exist.
 

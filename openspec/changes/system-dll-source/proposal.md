@@ -30,6 +30,6 @@ The System libraries section of the icon browser still shows procedural mock gly
 
 - New `src/iconreplacer/catalog/pe_icons.py`, which provides read-only ctypes access to PE resources.
 - New `src/iconreplacer/catalog/system_source.py`, which provides `SystemIconSource` and `build_system_sources()`.
-- New data files `src/iconreplacer/catalog/data/system_libraries.json` and `system_icon_tags.json`.
+- New data files `src/iconreplacer/catalog/system_data/system_libraries.json` and `system_icon_tags.json`.
 - New tests `tests/test_system_*.py`. These tests read system DLLs read-only (R0) and use a temporary `ICONREPLACER_HOME`.
 - No change to `core/*`, the UI or the version. No new dependencies.
