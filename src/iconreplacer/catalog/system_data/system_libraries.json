@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "libraries": [
+    {"file": "imageres.dll", "description": "Modern Windows icons: colored folders, drives, actions, alerts", "categories": ["Folders", "Drives & Storage", "System", "Security"], "default_categories": ["System"]},
+    {"file": "shell32.dll", "description": "Classic Explorer icons: folders, files, shortcuts, system", "categories": ["Folders", "Documents", "System"], "default_categories": ["System"]},
+    {"file": "ddores.dll", "description": "Hardware devices and peripherals", "categories": ["Devices"], "default_categories": ["Devices"]},
+    {"file": "wmploc.dll", "description": "Media, players, music, video and playlists", "categories": ["Media"], "default_categories": ["Media"]},
+    {"file": "mmres.dll", "description": "Audio, speakers, microphones and volume", "categories": ["Media", "Devices"], "default_categories": ["Media", "Devices"]},
+    {"file": "netshell.dll", "description": "Network connections, adapters, Wi-Fi and cables", "categories": ["Network"], "default_categories": ["Network"]},
+    {"file": "networkexplorer.dll", "description": "Sharing, servers and LAN devices", "categories": ["Network"], "default_categories": ["Network"]},
+    {"file": "pnidui.dll", "description": "Network status and tray icons", "categories": ["Network", "System"], "default_categories": ["Network"]},
+    {"file": "wpdshext.dll", "description": "Portable devices: phones, cameras, cards", "categories": ["Devices"], "default_categories": ["Devices"]},
+    {"file": "wiashext.dll", "description": "Scanners and image capture devices", "categories": ["Devices"], "default_categories": ["Devices"]},
+    {"file": "setupapi.dll", "description": "Driver setup and internal hardware", "categories": ["Devices", "System"], "default_categories": ["Devices", "System"]},
+    {"file": "dmdskres.dll", "description": "Disk management, partitions and storage", "categories": ["Drives & Storage"], "default_categories": ["Drives & Storage"]},
+    {"file": "dsuiext.dll", "description": "Directory services: users, groups, domains", "categories": ["Users", "Network"], "default_categories": ["Users", "Network"]},
+    {"file": "accessibilitycpl.dll", "description": "Accessibility: magnifier, on-screen keyboard", "categories": ["Accessibility"], "default_categories": ["Accessibility"]},
+    {"file": "sensorscpl.dll", "description": "Sensors: location, gyroscope, light", "categories": ["Devices"], "default_categories": ["Devices"]},
+    {"file": "powercpl.dll", "description": "Power, battery, sleep and hibernation", "categories": ["Power"], "default_categories": ["Power"]},
+    {"file": "powrprof.dll", "description": "Power plans and battery (companion of powercpl.dll)", "categories": ["Power"], "default_categories": ["Power"], "companion_of": "powercpl.dll"},
+    {"file": "mstscax.dll", "description": "Remote Desktop and external connections", "categories": ["Network"], "default_categories": ["Network"]},
+    {"file": "mstsc.exe", "description": "Remote Desktop client (companion of mstscax.dll)", "categories": ["Network"], "default_categories": ["Network"], "companion_of": "mstscax.dll"},
+    {"file": "ieframe.dll", "description": "Web navigation, favorites and security", "categories": ["Web", "Security"], "default_categories": ["Web"]},
+    {"file": "shdocvw.dll", "description": "Legacy web shell icons (companion of ieframe.dll)", "categories": ["Web"], "default_categories": ["Web"], "companion_of": "ieframe.dll"},
+    {"file": "mmcndmgr.dll", "description": "Management Console administrative icons", "categories": ["System"], "default_categories": ["System"]},
+    {"file": "compstui.dll", "description": "Legacy printing, pages and UI settings", "categories": ["Devices", "Legacy"], "default_categories": ["Devices", "Legacy"]},
+    {"file": "pifmgr.dll", "description": "Retro Windows 95/98 objects", "categories": ["Legacy"], "default_categories": ["Legacy"]},
+    {"file": "moricons.dll", "description": "MS-DOS and Windows 3.1/NT legacy icons", "categories": ["Legacy"], "default_categories": ["Legacy"]}
+  ]
+}
