@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
-from collections.abc import Sequence
+import logging
+from collections.abc import Callable, Sequence
+from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QByteArray, QRect, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPalette
@@ -14,6 +16,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
+    QPushButton,
     QSlider,
     QSplitter,
     QTabWidget,
@@ -22,14 +26,21 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iconreplacer.catalog.mock_source import MockIconSource
 from iconreplacer.catalog.registry import SourceRegistry
-from iconreplacer.core.contracts import FolderIconService, SettingsStore
-from iconreplacer.core.models import ActionResult, IconEntry, IconKind, Section, SourceInfo
+from iconreplacer.core.contracts import (
+    DynamicIconSource,
+    FolderIconService,
+    IconSource,
+    SearchableIconSource,
+    SettingsStore,
+)
+from iconreplacer.core.models import ActionResult, IconEntry, IconKind
+from iconreplacer.services.apply_worker import ActionRunner
 from iconreplacer.ui.about_dialog import AboutDialog
 from iconreplacer.ui.folder_base import recolor
 from iconreplacer.ui.icon_grid import DEFAULT_THUMB, MAX_THUMB, MIN_THUMB, IconGrid
 from iconreplacer.ui.preview_panel import PreviewPanel
+from iconreplacer.ui.result_dialog import FailureDetailsDialog, failed_folders
 from iconreplacer.ui.settings_view import SettingsView
 from iconreplacer.ui.sidebar import CategoryChips, SourceSidebar
 from iconreplacer.ui.source_pill import SourcePill
@@ -37,10 +48,21 @@ from iconreplacer.ui.target_header import TargetHeader
 from iconreplacer.ui.theme import ThemeManager, ThemeMode
 from iconreplacer.version import PRODUCT_NAME
 
+if TYPE_CHECKING:
+    from iconreplacer.shell.registration import RegistrationStatus, ShellRegistration
+
+log = logging.getLogger(__name__)
+
 MIN_W, MIN_H = 800, 560
 DEFAULT_W, DEFAULT_H = 1040, 760
 DEFAULT_SIDEBAR_W = 250
 MIN_VISIBLE_W, MIN_VISIBLE_H = 120, 60
+SEARCH_DEBOUNCE_MS = 400
+DYNAMIC_COALESCE_MS = 50
+BANNER_MS = 8000
+CONFIRM_LIST_LIMIT = 15
+
+LocalSourceFactory = Callable[[Path], IconSource]
 
 
 def geometry_fits(frame: QRect, screens: Sequence[QRect]) -> bool:
@@ -60,18 +82,31 @@ class MainWindow(QMainWindow):
         settings: SettingsStore,
         theme: ThemeManager | None = None,
         folders: Sequence[Path] = (),
+        *,
+        registration: ShellRegistration | None = None,
+        local_source_factory: LocalSourceFactory | None = None,
     ) -> None:
         super().__init__()
         self.registry = registry
         self.service = service
         self.settings = settings
         self.theme = theme
+        self.local_source_factory = local_source_factory
         self.setWindowTitle(PRODUCT_NAME)
         self.setMinimumSize(MIN_W, MIN_H)
         self.resize(DEFAULT_W, DEFAULT_H)
         self._sidebar_width = DEFAULT_SIDEBAR_W
         self._grown_by = 0
         self._source_id: str | None = None
+        self._unsubscribers: list[Callable[[], None]] = []
+        self._dirty_sources: set[str] = set()
+        self._entry_ids: dict[str, tuple[str, ...]] = {}
+        self._searched: tuple[str, str] | None = None  # (source id, query) last sent remotely
+        self._action_folders: tuple[Path, ...] = ()
+        self._banner_kind = ""
+        self._applied_name = ""
+        self.last_result: ActionResult | None = None
+        self.details_dialog: FailureDetailsDialog | None = None
 
         # restore persisted source state before the views are built from the registry
         for folder in settings.get("sources.local_folders", []) or []:
@@ -142,20 +177,36 @@ class MainWindow(QMainWindow):
         self.banner = QFrame()
         self.banner.setObjectName("banner")
         banner_lay = QHBoxLayout(self.banner)
-        banner_lay.setContentsMargins(10, 6, 10, 6)
+        banner_lay.setContentsMargins(10, 4, 4, 4)
         self.banner_text = QLabel()
         self.banner_text.setWordWrap(True)
         banner_lay.addWidget(self.banner_text, 1)
+        self.banner_action = QPushButton()
+        self.banner_action.setVisible(False)
+        self.banner_action.clicked.connect(self._on_banner_action)
+        banner_lay.addWidget(self.banner_action)
+        self.banner_close = QToolButton()
+        self.banner_close.setText("✕")
+        self.banner_close.setAutoRaise(True)
+        self.banner_close.setToolTip(self.tr("Dismiss"))
+        self.banner_close.clicked.connect(self.hide_banner)
+        banner_lay.addWidget(self.banner_close)
+        self._banner_callback: Callable[[], None] | None = None
         self.banner.setVisible(False)
         bl.addWidget(self.banner)
         self._banner_timer = QTimer(self)
         self._banner_timer.setSingleShot(True)
-        self._banner_timer.timeout.connect(lambda: self.banner.setVisible(False))
+        self._banner_timer.timeout.connect(self.hide_banner)
 
         self.tabs.addTab(browse, self.tr("Browse"))
 
         # ---------------- Settings tab
-        self.settings_view = SettingsView(registry, settings)
+        self.settings_view = SettingsView(
+            registry,
+            settings,
+            registration=registration,
+            local_folders_supported=local_source_factory is not None,
+        )
         self.tabs.addTab(self.settings_view, self.tr("Settings"))
 
         about_btn = QToolButton()
@@ -163,8 +214,21 @@ class MainWindow(QMainWindow):
         about_btn.clicked.connect(self.show_about)
         self.tabs.setCornerWidget(about_btn, Qt.Corner.TopRightCorner)
 
+        # ---------------- workers and timers
+        self.runner = ActionRunner(self)
+        self.runner.started.connect(lambda _a: self.header.set_busy(True))
+        self.runner.finished.connect(self._on_action_done)
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(SEARCH_DEBOUNCE_MS)
+        self._search_timer.timeout.connect(self._run_remote_search)
+        self._dynamic_timer = QTimer(self)
+        self._dynamic_timer.setSingleShot(True)
+        self._dynamic_timer.setInterval(DYNAMIC_COALESCE_MS)
+        self._dynamic_timer.timeout.connect(self._flush_dynamic)
+
         # ---------------- wiring
-        self.search.textChanged.connect(self.grid.proxy.set_search)
+        self.search.textChanged.connect(self._on_search_text)
         self.size_slider.valueChanged.connect(self._on_size)
         self.chips.category_selected.connect(self.grid.proxy.set_category)
         self.sidebar.source_selected.connect(self._on_source)
@@ -179,17 +243,22 @@ class MainWindow(QMainWindow):
         self.header.apply_clicked.connect(self._apply)
         self.header.undo_clicked.connect(self._undo)
         self.header.restore_clicked.connect(self._restore)
-        self.settings_view.network_changed.connect(lambda _on: self._refresh_availability())
-        self.settings_view.sources_changed.connect(self._refresh_availability)
+        self.settings_view.network_changed.connect(self._on_network)
+        self.settings_view.sources_changed.connect(self._on_sources_changed)
         self.settings_view.theme_changed.connect(self._on_theme)
         self.settings_view.add_local_folder.connect(self.add_local_folder)
+        self.settings_view.registration_changed.connect(self._on_registration_changed)
 
         if theme is not None:
             theme.changed.connect(self._on_theme_applied)
         self.grid.set_entries(registry.all_entries())
+        self._enabled_dynamic = self._enabled_dynamic_ids()
+        self._connect_dynamic_sources()
         self._refresh_availability()
         self._update_status()
         self._restore_view_state()
+        self._check_registration()
+        QTimer.singleShot(0, self._refresh_dynamic_sources)
 
     # -- persisted view state ----------------------------------------------------
     def _restore_view_state(self) -> None:
@@ -224,6 +293,8 @@ class MainWindow(QMainWindow):
         encoded = bytes(self.saveGeometry().toBase64().data()).decode("ascii")
         self.settings.set("ui.window_geometry", encoded)
         self.settings.set("ui.sources_visible", self.sources_visible())
+        self._disconnect_dynamic_sources()
+        self.runner.wait()  # let a running folder action finish its writes
         super().closeEvent(event)
 
     # -- rendering -------------------------------------------------------------
@@ -291,15 +362,129 @@ class MainWindow(QMainWindow):
         self._update_pill()
 
     def _on_source(self, source_id: str | None) -> None:
+        previous = self._searched
+        if previous is not None and previous[0] != source_id:
+            self._send_search(previous[0], "")  # restore the left source's default listing
         self._source_id = source_id
         self.grid.proxy.set_source(source_id)
+        self._update_search_exempt()
         self._update_pill()
+        if self._remote_search_source() is not None and self.search.text().strip():
+            self._search_timer.start()
 
     def _update_pill(self) -> None:
         if self._source_id is None or self.sources_visible():
             self.source_pill.setVisible(False)
         else:
             self.source_pill.show_source(self.registry.info(self._source_id).name)
+
+    # -- remote search -----------------------------------------------------------
+    def _remote_search_source(self) -> SearchableIconSource | None:
+        """The selected source when it can run remote queries and is available now."""
+        sid = self._source_id
+        if sid is None:
+            return None
+        src = self.registry.get(sid)
+        if not isinstance(src, SearchableIconSource):
+            return None
+        if not self.registry.is_available(sid, self.settings_view.network_allowed()):
+            return None
+        return src
+
+    def _update_search_exempt(self) -> None:
+        exempt = frozenset({self._source_id}) if self._remote_search_source() else frozenset()
+        self.grid.proxy.set_search_exempt(exempt)
+
+    def _on_search_text(self, text: str) -> None:
+        self.grid.proxy.set_search(text)
+        if self._remote_search_source() is not None:
+            self._search_timer.start()  # restart: debounce
+
+    def _send_search(self, source_id: str, query: str) -> None:
+        src = self.registry.get(source_id)
+        if isinstance(src, SearchableIconSource):
+            try:
+                src.search(query)
+            except Exception:  # a misbehaving source must not break typing
+                log.exception("search failed for %s", source_id)
+        self._searched = (source_id, query) if query else None
+
+    def _run_remote_search(self) -> None:
+        if self._remote_search_source() is None or self._source_id is None:
+            return
+        query = self.search.text().strip()
+        if self._searched == (self._source_id, query) or (not query and self._searched is None):
+            return
+        self._send_search(self._source_id, query)
+
+    # -- dynamic sources ---------------------------------------------------------
+    def _dynamic_sources(self) -> list[DynamicIconSource]:
+        return [s for s in self.registry.sources() if isinstance(s, DynamicIconSource)]
+
+    def _enabled_dynamic_ids(self) -> set[str]:
+        return {s.info.id for s in self._dynamic_sources() if self.registry.is_enabled(s.info.id)}
+
+    def _connect_dynamic_sources(self) -> None:
+        allowed = self.settings_view.network_allowed()
+        for src in self._dynamic_sources():
+            sid = src.info.id
+            if sid in self._entry_ids:
+                continue
+            self._entry_ids[sid] = tuple(e.id for e in src.entries())
+            try:
+                src.set_network_allowed(allowed)
+                self._unsubscribers.append(src.subscribe(partial(self._on_source_changed, sid)))
+            except Exception:
+                log.exception("cannot connect dynamic source %s", sid)
+
+    def _disconnect_dynamic_sources(self) -> None:
+        for unsubscribe in self._unsubscribers:
+            try:
+                unsubscribe()
+            except Exception:
+                log.exception("unsubscribe failed")
+        self._unsubscribers.clear()
+
+    def _refresh_dynamic_sources(self, only: set[str] | None = None) -> None:
+        for src in self._dynamic_sources():
+            sid = src.info.id
+            if not self.registry.is_enabled(sid) or (only is not None and sid not in only):
+                continue
+            try:
+                src.refresh()
+            except Exception:
+                log.exception("refresh failed for %s", sid)
+
+    def _on_source_changed(self, source_id: str) -> None:
+        """Subscriber callback (GUI thread): coalesce bursts of updates."""
+        self._dirty_sources.add(source_id)
+        self._dynamic_timer.start()
+
+    def _flush_dynamic(self) -> None:
+        dirty, self._dirty_sources = self._dirty_sources, set()
+        if not dirty:
+            return
+        changed = False
+        for sid in dirty:
+            ids = tuple(e.id for e in self.registry.get(sid).entries())
+            if ids != self._entry_ids.get(sid):
+                self._entry_ids[sid] = ids
+                changed = True
+        if changed:
+            self._reload_entries()
+        self.grid.delegate.clear_cache(dirty)
+        self.grid.view.viewport().update()
+        self.sidebar.refresh_sources(dirty)
+        entry = self.preview.entry
+        if entry is not None and entry.source_id in dirty:
+            self.preview.set_entry(entry, self.preview.source_label.text())
+        self._update_status()
+
+    def _reload_entries(self) -> None:
+        current = self.grid.current_entry()
+        self.grid.set_entries(self.registry.all_entries())
+        if current is None or not self.grid.select_entry_id(current.id):
+            self._on_entry(None)
 
     # -- slots -----------------------------------------------------------------
     def _on_size(self, value: int) -> None:
@@ -316,6 +501,25 @@ class MainWindow(QMainWindow):
         if self.theme is not None:
             self.theme.apply(ThemeMode(mode))
 
+    def _on_network(self, allowed: bool) -> None:
+        for src in self._dynamic_sources():
+            try:
+                src.set_network_allowed(allowed)
+            except Exception:
+                log.exception("set_network_allowed failed for %s", src.info.id)
+        if allowed:
+            self._refresh_dynamic_sources()
+        self._refresh_availability()
+        self.sidebar.refresh_sources()
+
+    def _on_sources_changed(self) -> None:
+        enabled = self._enabled_dynamic_ids()
+        newly = enabled - self._enabled_dynamic
+        self._enabled_dynamic = enabled
+        if newly:
+            self._refresh_dynamic_sources(newly)
+        self._refresh_availability()
+
     def _refresh_availability(self) -> None:
         allowed = self.settings_view.network_allowed()
         available = {
@@ -325,71 +529,189 @@ class MainWindow(QMainWindow):
         }
         self.sidebar.set_available(available)
         self.grid.proxy.set_available_sources(frozenset(available))
+        self._update_search_exempt()
         self._update_status()
 
     def _update_status(self, *_args) -> None:
         self.statusBar().showMessage(self.tr("%n icon(s) shown", "", self.grid.visible_count()))
 
+    # -- banner ----------------------------------------------------------------
+    def show_banner(
+        self,
+        text: str,
+        *,
+        action_text: str | None = None,
+        action: Callable[[], None] | None = None,
+        timeout: int = BANNER_MS,
+        kind: str = "info",
+    ) -> None:
+        """Show a notification; ``timeout`` 0 keeps it until dismissed or replaced."""
+        self._banner_kind = kind
+        self.banner_text.setText(text)
+        self._banner_callback = action
+        self.banner_action.setVisible(bool(action_text and action))
+        self.banner_action.setText(action_text or "")
+        self.banner.setVisible(True)
+        if timeout:
+            self._banner_timer.start(timeout)
+        else:
+            self._banner_timer.stop()
+
+    def hide_banner(self) -> None:
+        self._banner_timer.stop()
+        self._banner_kind = ""
+        self.banner.setVisible(False)
+
+    def banner_kind(self) -> str:
+        return self._banner_kind if not self.banner.isHidden() else ""
+
+    def _on_banner_action(self) -> None:
+        if self._banner_callback is not None:
+            self._banner_callback()
+
+    # -- Explorer integration ------------------------------------------------------
+    def _check_registration(self) -> None:
+        from iconreplacer.shell.registration import RegistrationState
+
+        status = self.settings_view.registration_status
+        if status is not None and status.state is RegistrationState.STALE:
+            self.show_banner(
+                self.tr("The Explorer “Replace Icon” menu points to another copy of IconReplacer."),
+                action_text=self.tr("Fix Explorer integration"),
+                action=self.settings_view.register_verb,
+                timeout=0,
+                kind="stale",
+            )
+
+    def _on_registration_changed(self, status: RegistrationStatus | None) -> None:
+        from iconreplacer.shell.registration import RegistrationState
+
+        if self.banner_kind() == "stale" and (
+            status is None or status.state is not RegistrationState.STALE
+        ):
+            self.hide_banner()
+
+    # -- folder actions ----------------------------------------------------------
     def _folders_text(self, n: int) -> str:
         return self.tr("%n folder(s)", "", n)
 
-    def _notify(self, result: ActionResult, text: str) -> None:
-        self.banner_text.setText(text if result.ok else self.tr("No target folder."))
-        self.banner.setVisible(True)
-        self._banner_timer.start(8000)
+    def _confirm_batch(self, question: str, folders: Sequence[Path]) -> bool:
+        shown = [str(f) for f in folders[:CONFIRM_LIST_LIMIT]]
+        if len(folders) > CONFIRM_LIST_LIMIT:
+            shown.append(
+                self.tr("…and %1 more").replace("%1", str(len(folders) - CONFIRM_LIST_LIMIT))
+            )
+        answer = QMessageBox.question(
+            self,
+            PRODUCT_NAME,
+            question + "\n\n" + "\n".join(shown),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _start(
+        self, action: str, question: str, fn: Callable[[Sequence[Path]], ActionResult]
+    ) -> bool:
+        folders = self.header.folders
+        if not folders or self.runner.busy:
+            return False
+        if len(folders) > 1 and not self._confirm_batch(question, folders):
+            return False
+        self._action_folders = tuple(folders)
+        self.header.set_busy(True)
+        self.runner.submit(action, lambda: fn(folders))
+        return True
 
     def _apply(self) -> None:
         entry = self.preview.entry
-        folders = self.header.folders
-        if entry is None or not folders:
+        if entry is None:
             return
         opts = self.preview.options()
-        result = self.service.apply(folders, entry, opts)
-        mode = (
-            self.tr("composed on folder base") if opts.compose_on_folder_base else self.tr("as-is")
-        )
-        text = (
-            self.tr("Simulation: “%1” would be applied (%2) to %3. Nothing was changed.")
+        n = len(self.header.folders)
+        question = (
+            self.tr("Apply “%1” to %2?")
             .replace("%1", entry.name)
-            .replace("%2", mode)
-            .replace("%3", self._folders_text(len(folders)))
+            .replace("%2", self._folders_text(n))
         )
-        self._notify(result, text)
+        self._applied_name = entry.name
+        self._start("apply", question, lambda fs: self.service.apply(fs, entry, opts))
 
     def _undo(self) -> None:
-        folders = self.header.folders
-        result = self.service.undo(folders)
-        self._notify(
-            result,
-            self.tr("Simulation: the last change would be undone on %1.").replace(
-                "%1", self._folders_text(len(folders))
-            ),
-        )
+        n = len(self.header.folders)
+        question = self.tr("Undo the last change on %1?").replace("%1", self._folders_text(n))
+        self._start("undo", question, self.service.undo)
 
     def _restore(self) -> None:
-        folders = self.header.folders
-        result = self.service.restore_default(folders)
-        self._notify(
-            result,
-            self.tr("Simulation: the default icon would be restored on %1.").replace(
-                "%1", self._folders_text(len(folders))
-            ),
+        n = len(self.header.folders)
+        question = self.tr("Restore the default icon on %1?").replace("%1", self._folders_text(n))
+        self._start("restore", question, self.service.restore_default)
+
+    def _success_text(self, action: str, n: int) -> str:
+        folders = self._folders_text(n)
+        if action == "apply":
+            return (
+                self.tr("“%1” applied to %2.")
+                .replace("%1", self._applied_name)
+                .replace("%2", folders)
+            )
+        if action == "undo":
+            return self.tr("Last change undone on %1.").replace("%1", folders)
+        return self.tr("Default icon restored on %1.").replace("%1", folders)
+
+    def _on_action_done(self, action: str, result: ActionResult) -> None:
+        self.header.set_busy(self.runner.busy)
+        self.last_result = result
+        folders = self._action_folders
+        failures = failed_folders(folders, result) if not result.ok else []
+        if not result.ok and not failures:  # reported failure without a folder to blame
+            failures = [(f, result.message) for f in folders]
+        done = len(folders) - len(failures)
+        if not failures:
+            text = self._success_text(action, done)
+            if result.simulated:
+                text = self.tr("Simulation: %1 Nothing was changed.").replace("%1", text)
+            self.show_banner(text, kind="success")
+            return
+        text = (
+            self.tr("%1 of %2 changed.")
+            .replace("%1", str(done))
+            .replace("%2", self._folders_text(len(folders)))
         )
+        self.show_banner(
+            text,
+            action_text=self.tr("Details…"),
+            action=partial(self.show_failure_details, failures),
+            timeout=0,
+            kind="failure",
+        )
+        self.show_failure_details(failures)
+
+    def show_failure_details(self, failures: Sequence[tuple[Path, str]]) -> FailureDetailsDialog:
+        if self.details_dialog is not None:
+            self.details_dialog.close()
+        self.details_dialog = FailureDetailsDialog(failures, self)
+        self.details_dialog.open()
+        return self.details_dialog
 
     def show_about(self) -> AboutDialog:
         dlg = AboutDialog(self)
         dlg.open()
         return dlg
 
+    # -- local folder sources ----------------------------------------------------
     def _register_local(self, path: Path) -> bool:
-        """Prototype: registers a mock local source for the folder. False if already known."""
-        sid = "local-" + hashlib.blake2s(str(path).lower().encode(), digest_size=4).hexdigest()
-        if sid in {s.info.id for s in self.registry.sources()}:
+        """Create a local source for ``path`` through the factory. False if not added."""
+        if self.local_source_factory is None:
             return False
-        info = SourceInfo(sid, path.name or str(path), str(path), Section.LOCAL, "User provided")
-        self.registry.add(
-            MockIconSource(info, ("Folders", "Media", "Documents"), 24, IconKind.FULL, str(path))
-        )
+        try:
+            source = self.local_source_factory(path)
+        except (OSError, ValueError) as exc:
+            log.warning("cannot add local folder %s: %s", path, exc)
+            return False
+        if source.info.id in {s.info.id for s in self.registry.sources()}:
+            return False
+        self.registry.add(source)
         return True
 
     def add_local_folder(self, path: Path) -> None:
@@ -398,7 +720,14 @@ class MainWindow(QMainWindow):
         folders = list(self.settings.get("sources.local_folders", []) or [])
         if str(path) not in folders:
             self.settings.set("sources.local_folders", [*folders, str(path)])
-        self.sidebar.rebuild()
+        self.sidebar.rebuild()  # selects "All"
+        self._on_source(None)
         self.settings_view.rebuild_sources()
         self.grid.set_entries(self.registry.all_entries())
+        known = set(self._entry_ids)
+        self._connect_dynamic_sources()
+        self._enabled_dynamic = self._enabled_dynamic_ids()
         self._refresh_availability()
+        new = set(self._entry_ids) - known
+        if new:
+            self._refresh_dynamic_sources(new)

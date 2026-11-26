@@ -15,13 +15,16 @@ from PySide6.QtWidgets import (
 )
 
 from iconreplacer.catalog.registry import SourceRegistry
-from iconreplacer.core.models import CATEGORIES, Section
+from iconreplacer.core.contracts import DynamicIconSource, IconSource
+from iconreplacer.core.models import CATEGORIES, Section, SourceState
 from iconreplacer.ui.flow_layout import FlowLayout, flow_size_policy
 from iconreplacer.ui.strings import category_label, section_label
 
 SOURCE_ROLE = Qt.ItemDataRole.UserRole + 10
 DESC_ROLE = Qt.ItemDataRole.UserRole + 11
 COUNT_ROLE = Qt.ItemDataRole.UserRole + 12
+BADGE_ROLE = Qt.ItemDataRole.UserRole + 13  # (state value, text) while not ready
+ERROR_COLOR = "#F46A6A"
 ALL_ID = "__all__"
 
 
@@ -64,7 +67,12 @@ class _SourceDelegate(QStyledItemDelegate):
         painter.drawText(
             top, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, option_text
         )
-        if count is not None:
+        badge = index.data(BADGE_ROLE)
+        if badge:
+            state, text = badge
+            painter.setPen(QColor(ERROR_COLOR) if state == SourceState.ERROR.value else muted)
+            painter.drawText(top, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, text)
+        elif count is not None:
             painter.setPen(muted)
             painter.drawText(
                 top, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{count:,}"
@@ -127,6 +135,41 @@ class SourceSidebar(QTreeWidget):
             header.setExpanded(True)
         self.setCurrentItem(all_item)
         self.blockSignals(False)
+
+    def _state_text(self, state: SourceState) -> str:
+        return {
+            SourceState.LOADING: self.tr("Loading…"),
+            SourceState.OFFLINE: self.tr("Offline"),
+            SourceState.ERROR: self.tr("Error"),
+        }.get(state, "")
+
+    def _update_item(self, item: QTreeWidgetItem, src: IconSource) -> None:
+        info = src.info
+        item.setData(0, COUNT_ROLE, len(src.entries()))
+        tip = "\n".join((info.name, info.description, info.license))
+        badge = None
+        if isinstance(src, DynamicIconSource):
+            state = src.state()
+            if state is not SourceState.READY:
+                badge = (state.value, self._state_text(state))
+            if state is SourceState.ERROR:
+                tip += "\n" + self.tr("Error: %1").replace("%1", src.last_error() or "?")
+        item.setData(0, BADGE_ROLE, badge)
+        item.setToolTip(0, tip)
+
+    def refresh_sources(self, source_ids=None) -> None:
+        """Update counts, state badges and tooltips (all sources, or only ``source_ids``)."""
+        for sid, item in self._items.items():
+            if sid == ALL_ID:
+                continue
+            if source_ids is None or sid in source_ids:
+                self._update_item(item, self._registry.get(sid))
+        self._items[ALL_ID].setData(0, COUNT_ROLE, len(self._registry.all_entries()))
+        self.viewport().update()
+
+    def badge(self, source_id: str) -> str:
+        data = self._items[source_id].data(0, BADGE_ROLE)
+        return data[1] if data else ""
 
     def set_available(self, available: set[str]) -> None:
         for sid, item in self._items.items():

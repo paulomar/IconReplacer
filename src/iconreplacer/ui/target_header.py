@@ -7,10 +7,12 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QProgressBar,
     QPushButton,
     QToolButton,
     QVBoxLayout,
@@ -23,12 +25,14 @@ class TargetHeader(QFrame):
     apply_clicked = Signal()
     undo_clicked = Signal()
     restore_clicked = Signal()
+    folders_changed = Signal()
 
     def __init__(self, folders: Sequence[Path] = (), parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("panel")
         self._folders: tuple[Path, ...] = ()
         self._has_selection = False
+        self._busy = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 8)
@@ -46,6 +50,17 @@ class TargetHeader(QFrame):
         self.expand.setToolTip(self.tr("Show all target folders"))
         self.expand.toggled.connect(self._toggle_list)
         row.addWidget(self.expand)
+        self.choose_btn = QPushButton(self.tr("Choose folders…"))
+        self.choose_btn.setToolTip(self.tr("Add a target folder (pick again to add more)"))
+        self.choose_btn.clicked.connect(self.choose_folder)
+        row.addWidget(self.choose_btn)
+        self.busy_bar = QProgressBar()
+        self.busy_bar.setRange(0, 0)  # indeterminate
+        self.busy_bar.setFixedWidth(90)
+        self.busy_bar.setTextVisible(False)
+        self.busy_bar.setToolTip(self.tr("Working…"))
+        self.busy_bar.setVisible(False)
+        row.addWidget(self.busy_bar)
 
         self.restore_btn = QPushButton(self.tr("Restore default"))
         self.undo_btn = QPushButton(self.tr("Undo"))
@@ -85,16 +100,47 @@ class TargetHeader(QFrame):
         if n <= 1:
             self.expand.setChecked(False)
         self._update_buttons()
+        self.folders_changed.emit()
+
+    def add_folders(self, folders: Sequence[Path]) -> bool:
+        """Append folders that are not targets yet (case-insensitive). True if any was added."""
+        known = {str(p).lower() for p in self._folders}
+        extra: list[Path] = []
+        for f in folders:
+            key = str(f).lower()
+            if key not in known:
+                known.add(key)
+                extra.append(Path(f))
+        if extra:
+            self.set_folders([*self._folders, *extra])
+        return bool(extra)
+
+    def choose_folder(self) -> None:
+        start = str(self._folders[-1].parent) if self._folders else ""
+        path = QFileDialog.getExistingDirectory(self, self.tr("Choose a target folder"), start)
+        if path:
+            self.add_folders([Path(path)])
+
+    @property
+    def busy(self) -> bool:
+        return self._busy
+
+    def set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        self.busy_bar.setVisible(busy)
+        self._update_buttons()
 
     def set_has_selection(self, has: bool) -> None:
         self._has_selection = has
         self._update_buttons()
 
     def _update_buttons(self) -> None:
-        has_target = bool(self._folders)
+        idle = not self._busy
+        has_target = bool(self._folders) and idle
         self.apply_btn.setEnabled(has_target and self._has_selection)
         self.undo_btn.setEnabled(has_target)
         self.restore_btn.setEnabled(has_target)
+        self.choose_btn.setEnabled(idle)
 
     def _toggle_list(self, on: bool) -> None:
         self.list.setVisible(on)

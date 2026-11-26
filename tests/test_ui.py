@@ -139,7 +139,12 @@ def test_glyph_icons_default_to_composition(window):
 
 
 # 4.5 target header + mocked actions ----------------------------------------------
-def test_batch_header_and_simulated_apply(window, tmp_path):
+def test_batch_header_and_simulated_apply(window, tmp_path, qtbot, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(
+        QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
+    )
     folders = [tmp_path / n for n in "ABC"]
     for f in folders:
         f.mkdir()
@@ -151,6 +156,7 @@ def test_batch_header_and_simulated_apply(window, tmp_path):
     w.grid.select_row(0)
     assert w.header.apply_btn.isEnabled()
     w.header.apply_btn.click()
+    qtbot.waitUntil(lambda: not w.runner.busy and w.last_result is not None)
     assert w.banner.isVisibleTo(w)
     assert "Nothing was changed" in w.banner_text.text()
     assert w.service.calls[-1].action == "apply"
