@@ -1,0 +1,29 @@
+{
+  "_doc": "Keyword -> canonical category table for external sources. A token (lower-case word of a name or path segment, trailing 's' ignored) selects every category that lists it. 'fallback' is used when nothing matches (System: always a valid canonical category).",
+  "fallback": "System",
+  "keywords": {
+    "Folders": ["folder", "directory", "dir", "library", "archive", "download", "documents", "pictures", "desktop"],
+    "Drives & Storage": ["drive", "disk", "hdd", "ssd", "storage", "usb", "sd", "cd", "dvd", "database", "server", "cloud", "memory", "nas"],
+    "Devices": ["device", "computer", "laptop", "desktop", "monitor", "keyboard", "mouse", "printer", "scanner", "phone", "tablet", "camera", "webcam", "headphone", "speaker", "microphone", "gamepad", "controller", "bluetooth", "cpu", "chip", "battery"],
+    "Media": ["media", "music", "video", "audio", "movie", "film", "photo", "image", "picture", "play", "pause", "stop", "record", "playlist", "radio", "podcast", "gallery", "camera"],
+    "Network": ["network", "wifi", "wi", "ethernet", "lan", "wan", "globe", "router", "share", "remote", "vpn", "cloud", "signal", "antenna"],
+    "Security": ["security", "lock", "unlock", "key", "shield", "password", "fingerprint", "firewall", "virus", "antivirus", "protect", "certificate", "encrypt"],
+    "System": ["system", "settings", "setting", "gear", "cog", "config", "tool", "wrench", "control", "panel", "terminal", "console", "command", "window", "app", "application", "code", "bug", "update", "recycle", "trash", "bin"],
+    "Users": ["user", "users", "person", "people", "account", "profile", "group", "team", "contact", "friend", "avatar", "face"],
+    "Accessibility": ["accessibility", "accessible", "wheelchair", "eye", "ear", "hearing", "braille", "contrast", "magnifier", "zoom"],
+    "Power": ["power", "battery", "plug", "bolt", "lightning", "energy", "sleep", "shutdown", "restart", "charge", "electric"],
+    "Web": ["web", "browser", "internet", "link", "url", "html", "css", "website", "chrome", "firefox", "edge", "github", "git", "mail", "email", "rss", "social", "logo"],
+    "Documents": ["document", "doc", "file", "text", "note", "notes", "pdf", "word", "excel", "powerpoint", "sheet", "page", "paper", "book", "report", "article", "clipboard", "zip", "txt"],
+    "Legacy": ["legacy", "classic", "retro", "old", "xp", "vista", "win95", "floppy", "diskette"]
+  },
+  "collection_categories": {
+    "Logos": ["Web"],
+    "Brands": ["Web"],
+    "Flags / Maps": ["Web"],
+    "Emoji": ["Users"],
+    "Thematic": ["System"]
+  },
+  "collection_tags": {
+    "Contains Animations": ["System"]
+  }
+}

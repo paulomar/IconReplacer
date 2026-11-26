@@ -38,6 +38,7 @@ qt_api = "pyside6"
 markers = [
     "registry: touches the real HKCU IconReplacer verb key (R1, snapshot + verified rollback)",
     "build: slow end-to-end PyInstaller release build (skipped unless -m build)",
+    "network: live smoke test against public APIs (skipped unless ICONREPLACER_NETWORK_TESTS=1)",
 ]
 addopts = "-m 'not build'"
 
