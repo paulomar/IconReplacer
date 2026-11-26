@@ -34,7 +34,10 @@ packages = ["src/iconreplacer"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 qt_api = "pyside6"
-markers = ["registry: touches the real HKCU IconReplacer verb key (R1, snapshot + verified rollback)"]
+markers = [
+    "registry: touches the real HKCU IconReplacer verb key (R1, snapshot + verified rollback)",
+    "network: live smoke test against public APIs (skipped unless ICONREPLACER_NETWORK_TESTS=1)",
+]
 
 [tool.ruff]
 line-length = 100
