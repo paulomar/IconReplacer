@@ -6,8 +6,6 @@ from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import (
     QButtonGroup,
-    QHBoxLayout,
-    QScrollArea,
     QStyle,
     QStyledItemDelegate,
     QToolButton,
@@ -18,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from iconreplacer.catalog.registry import SourceRegistry
 from iconreplacer.core.models import CATEGORIES, Section
+from iconreplacer.ui.flow_layout import FlowLayout, flow_size_policy
 from iconreplacer.ui.strings import category_label, section_label
 
 SOURCE_ROLE = Qt.ItemDataRole.UserRole + 10
@@ -150,20 +149,15 @@ class SourceSidebar(QTreeWidget):
         self.source_selected.emit(None if sid == ALL_ID else sid)
 
 
-class CategoryChips(QScrollArea):
+class CategoryChips(QWidget):
+    """Exclusive category chips that wrap onto extra lines in narrow windows."""
+
     category_selected = Signal(object)  # category | None
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWidgetResizable(True)
-        self.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setFixedHeight(36)
-        host = QWidget()
-        lay = QHBoxLayout(host)
-        lay.setContentsMargins(0, 2, 0, 2)
-        lay.setSpacing(6)
+        self.setSizePolicy(flow_size_policy())
+        lay = FlowLayout(self, spacing=6)
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
         self.buttons: dict[str | None, QToolButton] = {}
@@ -177,9 +171,7 @@ class CategoryChips(QScrollArea):
             self.group.addButton(b)
             lay.addWidget(b)
             self.buttons[cat] = b
-        lay.addStretch(1)
         self.buttons[None].setChecked(True)
-        self.setWidget(host)
 
     def select(self, category: str | None) -> None:
         self.buttons[category].click()

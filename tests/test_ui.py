@@ -2,6 +2,7 @@ import time
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QRect
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
@@ -200,10 +201,17 @@ def test_minimum_size_and_reflow(window, qtbot):
     w = window()
     assert w.minimumSize().width() <= MIN_W and w.minimumSize().height() <= MIN_H
     assert (MIN_W, MIN_H) <= (800, 560)
-    w.resize(MIN_W, MIN_H)
-    qtbot.wait(50)
-    for widget in (w.sidebar, w.grid, w.preview, w.search, w.header.apply_btn):
-        assert widget.isVisible() and widget.width() > 0
+    for sources in (False, True):
+        w.showNormal()
+        w.set_sources_visible(sources)
+        w.resize(MIN_W, MIN_H)
+        qtbot.wait(50)
+        widgets = [w.grid, w.preview, w.search, w.header.apply_btn, w.sources_btn]
+        if sources:
+            widgets.append(w.sidebar)
+        for widget in widgets:
+            assert widget.isVisible() and widget.width() > 0, (sources, widget)
+        w.set_sources_visible(False)
     narrow = w.grid.columns()
     w.resize(1800, 900)
     qtbot.wait(50)
@@ -234,13 +242,89 @@ def test_glyphs_follow_theme_ink(window):
         assert all(abs(c.lightness() - ink.lightness()) < 30 for c in opaque)
 
 
-def test_preview_fits_minimum_size_with_scroll(window, qtbot):
+def test_preview_sizes_fit_at_minimum_size(window, qtbot):
     w = window()
     w.resize(MIN_W, MIN_H)
     w.grid.select_row(0)
     qtbot.wait(50)
-    big = w.preview.size_labels[256].geometry()
-    s128 = w.preview.size_labels[128].mapTo(
-        w.preview.scroll.widget(), w.preview.size_labels[128].rect().topLeft()
-    )
-    assert s128.y() >= big.bottom(), "128 preview must not overlap the 256 preview"
+    stage = w.preview.stage
+    for s in PREVIEW_SIZES:
+        lbl = w.preview.size_labels[s]
+        right = lbl.mapTo(stage, lbl.rect().topRight()).x()
+        assert 0 <= right <= stage.width(), f"{s}px preview clipped"
+
+
+# compact layout: sources toggle + indicator ------------------------------------------
+@pytest.fixture
+def roomy_screen(monkeypatch):
+    monkeypatch.setattr(MainWindow, "_available_geometry", lambda self: QRect(0, 0, 2560, 1400))
+
+
+def test_sources_hidden_by_default_with_all_selected(window):
+    w = window()
+    assert not w.sources_visible()
+    assert not w.sources_btn.isChecked()
+    assert w.grid.visible_count() == len(w.registry.all_entries())
+    assert not w.source_pill.isVisible()
+
+
+def test_default_window_is_compact(qtbot):
+    from iconreplacer.ui.main_window import DEFAULT_W
+
+    assert DEFAULT_W <= 1040
+
+
+def test_show_sources_widens_and_hide_restores(window, qtbot, roomy_screen):
+    w = window()
+    w.showNormal()
+    w.setGeometry(100, 100, 1040, 760)
+    qtbot.wait(20)
+    before_w = w.width()
+    grid_before = w.grid.width()
+    w.sources_btn.click()
+    qtbot.wait(20)
+    assert w.sources_visible()
+    assert w.width() == before_w + 250 + w.splitter.handleWidth()
+    assert w.grid.width() >= grid_before - 2
+    w.sources_btn.click()
+    qtbot.wait(20)
+    assert not w.sources_visible()
+    assert w.width() == before_w
+
+
+def test_show_sources_clamped_to_screen(window, qtbot, monkeypatch):
+    monkeypatch.setattr(MainWindow, "_available_geometry", lambda self: QRect(0, 0, 1100, 900))
+    w = window()
+    w.showNormal()
+    w.setGeometry(0, 0, 1040, 760)
+    qtbot.wait(20)
+    w.set_sources_visible(True)
+    assert w.width() <= 1100
+    w.set_sources_visible(False)
+    assert w.width() == 1040
+
+
+def test_maximized_window_keeps_state(window, qtbot, roomy_screen):
+    w = window()
+    w.showMaximized()
+    qtbot.wait(50)
+    geo = w.geometry()
+    w.set_sources_visible(True)
+    qtbot.wait(20)
+    assert w.isMaximized() and w.geometry() == geo and w.sources_visible()
+    w.set_sources_visible(False)
+    assert w.isMaximized() and w.geometry() == geo
+
+
+def test_indicator_after_hiding_and_dismiss(window, qtbot, roomy_screen):
+    w = window()
+    w.set_sources_visible(True)
+    w.sidebar.select_source("shell32.dll")
+    assert not w.source_pill.isVisible()
+    w.set_sources_visible(False)
+    assert w.source_pill.isVisible()
+    assert w.source_pill.label.text() == "Source: shell32.dll"
+    assert w.grid.visible_count() == w.registry.count("shell32.dll")
+    w.source_pill.close_btn.click()
+    assert not w.source_pill.isVisible()
+    assert w.grid.visible_count() == len(w.registry.all_entries())

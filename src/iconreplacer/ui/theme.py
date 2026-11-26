@@ -93,11 +93,14 @@ def _qss(c: dict[str, str]) -> str:
     QPushButton:disabled {{ color: {c["muted"]}; }}
     QPushButton#primary {{ background: {ACCENT}; color: white; border-color: {ACCENT}; }}
     QPushButton#primary:disabled {{ background: {c["border"]}; color: {c["muted"]}; }}
+    QToolButton:checked {{ background: {c["hover"]}; border: 1px solid {ACCENT}; border-radius: 4px; }}
     QToolButton#chip {{
         padding: 3px 10px; border: 1px solid {c["border"]}; border-radius: 11px;
     }}
     QToolButton#chip:checked {{ background: {ACCENT}; color: white; border-color: {ACCENT}; }}
     QFrame#panel {{ background: {c["panel"]}; border: 1px solid {c["border"]}; border-radius: 6px; }}
+    QFrame#stage {{ background: {c["base"]}; border: 1px solid {c["border"]}; border-radius: 6px; }}
+    QFrame#pill {{ background: {c["alt"]}; border: 1px solid {ACCENT}; border-radius: 12px; }}
     QFrame#banner {{ background: {c["alt"]}; border-left: 3px solid {ACCENT}; border-radius: 3px; }}
     QLabel#muted {{ color: {c["muted"]}; }}
     QLabel#h2 {{ font-size: 11pt; font-weight: 600; }}

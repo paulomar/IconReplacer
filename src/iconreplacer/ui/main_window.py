@@ -6,8 +6,8 @@ import hashlib
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPalette
+from PySide6.QtCore import QRect, Qt, QTimer
+from PySide6.QtGui import QGuiApplication, QKeySequence, QPalette
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -32,11 +32,14 @@ from iconreplacer.ui.icon_grid import DEFAULT_THUMB, MAX_THUMB, MIN_THUMB, IconG
 from iconreplacer.ui.preview_panel import PreviewPanel
 from iconreplacer.ui.settings_view import SettingsView
 from iconreplacer.ui.sidebar import CategoryChips, SourceSidebar
+from iconreplacer.ui.source_pill import SourcePill
 from iconreplacer.ui.target_header import TargetHeader
 from iconreplacer.ui.theme import ThemeManager, ThemeMode
 from iconreplacer.version import PRODUCT_NAME
 
 MIN_W, MIN_H = 800, 560
+DEFAULT_W, DEFAULT_H = 1040, 760
+DEFAULT_SIDEBAR_W = 250
 
 
 class MainWindow(QMainWindow):
@@ -55,7 +58,10 @@ class MainWindow(QMainWindow):
         self.theme = theme
         self.setWindowTitle(PRODUCT_NAME)
         self.setMinimumSize(MIN_W, MIN_H)
-        self.resize(1280, 800)
+        self.resize(DEFAULT_W, DEFAULT_H)
+        self._sidebar_width = DEFAULT_SIDEBAR_W
+        self._grown_by = 0
+        self._source_id: str | None = None
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
@@ -71,6 +77,16 @@ class MainWindow(QMainWindow):
         bl.addWidget(self.header)
 
         bar = QHBoxLayout()
+        self.sources_btn = QToolButton()
+        self.sources_btn.setText(self.tr("Sources"))
+        self.sources_btn.setCheckable(True)
+        self.sources_btn.setShortcut(QKeySequence("Ctrl+B"))
+        self.sources_btn.setToolTip(self.tr("Show or hide the sources panel (Ctrl+B)"))
+        self.sources_btn.toggled.connect(self.set_sources_visible)
+        bar.addWidget(self.sources_btn)
+        self.source_pill = SourcePill()
+        self.source_pill.dismissed.connect(lambda: self.sidebar.select_source(None))
+        bar.addWidget(self.source_pill)
         self.search = QLineEdit()
         self.search.setPlaceholderText(self.tr("Search name, tag or resource ID…"))
         self.search.setClearButtonEnabled(True)
@@ -102,7 +118,8 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setStretchFactor(2, 0)
-        self.splitter.setSizes([250, 700, 330])
+        self.splitter.setSizes([DEFAULT_SIDEBAR_W, 740, 280])
+        self.sidebar.setVisible(False)
         bl.addWidget(self.splitter, 1)
 
         self.banner = QFrame()
@@ -133,7 +150,7 @@ class MainWindow(QMainWindow):
         self.search.textChanged.connect(self.grid.proxy.set_search)
         self.size_slider.valueChanged.connect(self._on_size)
         self.chips.category_selected.connect(self.grid.proxy.set_category)
-        self.sidebar.source_selected.connect(self.grid.proxy.set_source)
+        self.sidebar.source_selected.connect(self._on_source)
         self.grid.entry_selected.connect(self._on_entry)
         for sig in (
             self.grid.proxy.modelReset,
@@ -169,6 +186,58 @@ class MainWindow(QMainWindow):
         self.grid.delegate.clear_cache()
         self.grid.view.viewport().update()
         self.preview.set_entry(self.preview.entry, self.preview.source_label.text())
+
+    # -- sources panel ---------------------------------------------------------
+    def _available_geometry(self) -> QRect:
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        return screen.availableGeometry()
+
+    def sources_visible(self) -> bool:
+        return not self.sidebar.isHidden()
+
+    def set_sources_visible(self, on: bool) -> None:
+        """Show/hide the sources sidebar, growing/shrinking a normal window to fit it."""
+        if on == self.sources_visible():
+            return
+        if self.sources_btn.isChecked() != on:
+            self.sources_btn.blockSignals(True)
+            self.sources_btn.setChecked(on)
+            self.sources_btn.blockSignals(False)
+        resizable = not (self.isMaximized() or self.isFullScreen())
+        if on:
+            sizes = self.splitter.sizes()
+            grid_w, preview_w = sizes[1], sizes[2]
+            if resizable:
+                avail = self._available_geometry()
+                geo = self.geometry()
+                extra = self._sidebar_width + self.splitter.handleWidth()
+                target = min(geo.width() + extra, avail.width())
+                self._grown_by = max(0, target - geo.width())
+                x = min(geo.x(), avail.x() + avail.width() - target)
+                self.setGeometry(max(avail.x(), x), geo.y(), target, geo.height())
+            else:
+                self._grown_by = 0
+            self.sidebar.setVisible(True)
+            self.splitter.setSizes([self._sidebar_width, grid_w, preview_w])
+        else:
+            self._sidebar_width = max(self.sidebar.minimumWidth(), self.splitter.sizes()[0])
+            self.sidebar.setVisible(False)
+            if resizable and self._grown_by:
+                geo = self.geometry()
+                self.resize(max(self.minimumWidth(), geo.width() - self._grown_by), geo.height())
+            self._grown_by = 0
+        self._update_pill()
+
+    def _on_source(self, source_id: str | None) -> None:
+        self._source_id = source_id
+        self.grid.proxy.set_source(source_id)
+        self._update_pill()
+
+    def _update_pill(self) -> None:
+        if self._source_id is None or self.sources_visible():
+            self.source_pill.setVisible(False)
+        else:
+            self.source_pill.show_source(self.registry.info(self._source_id).name)
 
     # -- slots -----------------------------------------------------------------
     def _on_size(self, value: int) -> None:
