@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QLocale, QTranslator
@@ -14,6 +15,7 @@ from iconreplacer.cli import CliOptions
 from iconreplacer.core.contracts import SettingsStore
 from iconreplacer.services.mock_folder_service import MockFolderIconService
 from iconreplacer.settings import JsonSettingsStore
+from iconreplacer.shell.ipc import acquire, collect_startup_folders
 from iconreplacer.ui.main_window import MainWindow
 from iconreplacer.ui.settings_view import I18N_DIR
 from iconreplacer.ui.theme import ThemeManager, ThemeMode
@@ -54,13 +56,28 @@ def create_window(
     return MainWindow(registry, MockFolderIconService(), settings, theme, options.folders)
 
 
+def append_folders(window: MainWindow, new: list[Path]) -> None:
+    """Add folders received from later launches to the target list (no duplicates)."""
+    known = {str(p).lower() for p in window.header.folders}
+    extra = [p for p in new if str(p).lower() not in known]
+    if extra:
+        window.header.set_folders([*window.header.folders, *extra])
+    window.raise_()
+    window.activateWindow()
+
+
 def run(options: CliOptions) -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName(PRODUCT_NAME)
     app.setApplicationVersion(FULL_VERSION)
+    server = acquire(options.folders)  # single instance: forward folders to a running one
+    if server is None:
+        return 0
     settings = JsonSettingsStore()
     install_translator(app, settings.get("ui.language", ""))
+    options = replace(options, folders=tuple(collect_startup_folders(server, options.folders)))
     window = create_window(options, app, settings)
+    server.folders_received.connect(lambda new: append_folders(window, new))
     app.aboutToQuit.connect(settings.save)
     window.show()
     return app.exec()

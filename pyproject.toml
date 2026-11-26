@@ -34,6 +34,7 @@ packages = ["src/iconreplacer"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 qt_api = "pyside6"
+markers = ["registry: touches the real HKCU IconReplacer verb key (R1, snapshot + verified rollback)"]
 
 [tool.ruff]
 line-length = 100

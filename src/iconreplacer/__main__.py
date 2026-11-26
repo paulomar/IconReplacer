@@ -10,6 +10,11 @@ def main(argv: list[str] | None = None) -> int:
 
     options = parse_args(argv)  # handles --version before any Qt import
 
+    if options.shell_action:
+        from iconreplacer.cli import run_shell_action
+
+        return run_shell_action(options.shell_action)
+
     from iconreplacer.app import run
 
     return run(options)
