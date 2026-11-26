@@ -38,6 +38,18 @@ uv run ruff check
 uv run pytest
 ```
 
+## Build a release
+
+```powershell
+uv run python tools/build_release.py
+```
+
+Produces `dist/IconReplacer-<version>-win64.zip` and a `.sha256` file: a portable PyInstaller
+onedir build (`IconReplacer.exe`, console companion `iconreplacer-cli.exe`, LICENSE,
+THIRD_PARTY_NOTICES.md, README-PORTABLE.txt). The build compiles translations, generates the
+icon and version resource, smoke-tests `--version` and exits non-zero on any failure.
+The slow end-to-end test runs with `uv run pytest -m build -o addopts=""`.
+
 ## Translations
 
 English is built in. To regenerate the template `src/iconreplacer/i18n/iconreplacer_en.ts`
