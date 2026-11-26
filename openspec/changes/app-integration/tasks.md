@@ -2,7 +2,7 @@
 
 ## 1. Materializer
 
-- [ ] 1.1 `services/materializer.py` `CompositeMaterializer(registry)` routing resource / composed resource / bytes-provider entries with typed `ConversionError`s (verify: `tests/test_integration_materializer.py` covers resource, compose, stub bytes provider, missing provider, unknown source)
+- [x] 1.1 `services/materializer.py` `CompositeMaterializer(registry)` routing resource / composed resource / bytes-provider entries with typed `ConversionError`s (verify: `tests/test_integration_materializer.py` covers resource, compose, stub bytes provider, missing provider, unknown source)
 
 ## 2. App wiring
 
