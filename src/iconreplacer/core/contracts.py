@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -12,6 +12,7 @@ from iconreplacer.core.models import (
     IconEntry,
     IconPayload,
     SourceInfo,
+    SourceState,
 )
 
 if TYPE_CHECKING:
@@ -31,6 +32,48 @@ class IconSource(Protocol):
 
     def render(self, entry: IconEntry, size: int) -> QImage:
         """Render ``entry`` as a square ARGB image of ``size`` pixels."""
+        ...
+
+
+@runtime_checkable
+class DynamicIconSource(IconSource, Protocol):
+    """A source whose content arrives asynchronously (network, background scans).
+
+    ``entries()`` and ``render()`` never block: ``render`` returns a placeholder and
+    schedules a fetch when pixels are missing. Subscriber callbacks are always
+    invoked on the Qt GUI thread whenever entries, state or thumbnails change.
+    """
+
+    def state(self) -> SourceState: ...
+
+    def last_error(self) -> str | None: ...
+
+    def subscribe(self, callback: Callable[[], None]) -> Callable[[], None]:
+        """Register ``callback``; returns a function that unsubscribes it."""
+        ...
+
+    def refresh(self) -> None:
+        """Start (re)loading in the background; no-op when the network is disallowed."""
+        ...
+
+    def set_network_allowed(self, allowed: bool) -> None: ...
+
+
+@runtime_checkable
+class SearchableIconSource(Protocol):
+    """A source that can run a remote query; results replace ``entries()``."""
+
+    def search(self, query: str) -> None:
+        """Non-blocking; an empty query restores the default listing."""
+        ...
+
+
+@runtime_checkable
+class IconBytesProvider(Protocol):
+    """Raw image bytes for an entry (to build an .ico). MAY BLOCK: worker threads only."""
+
+    def fetch_bytes(self, entry: IconEntry) -> bytes:
+        """Return the original image bytes; raise OSError/ValueError on failure."""
         ...
 
 

@@ -18,6 +18,13 @@ class IconKind(StrEnum):
     GLYPH = "glyph"  # monochrome glyph, best composed on a folder base
 
 
+class SourceState(StrEnum):
+    READY = "ready"
+    LOADING = "loading"
+    OFFLINE = "offline"  # network disallowed or unreachable
+    ERROR = "error"
+
+
 class RefKind(StrEnum):
     RESOURCE = "resource"  # PE resource in a DLL/EXE: location + resource_id
     FILE = "file"  # standalone image file (.ico/.png/.svg/.icns)
