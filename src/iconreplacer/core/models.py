@@ -94,3 +94,41 @@ class ActionResult:
     message: str
     affected: tuple[Path, ...] = ()
     simulated: bool = False
+
+
+ICO_MAGIC = bytes((0, 0, 1, 0))  # ICONDIR: reserved=0, type=1 (icon)
+
+
+class PayloadKind(StrEnum):
+    RESOURCE = "resource"  # icon resource inside a DLL/EXE, referenced in place
+    ICO = "ico"  # ready-to-write .ico file content
+
+
+@dataclass(frozen=True, slots=True)
+class IconPayload:
+    """What will actually be written for a folder icon."""
+
+    kind: PayloadKind
+    location: str | None = None
+    resource_id: int | None = None
+    ico: bytes | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind is PayloadKind.RESOURCE:
+            if not self.location or self.resource_id is None or self.ico is not None:
+                raise ValueError("resource payload needs location and resource_id only")
+            if self.resource_id <= 0:
+                raise ValueError("resource_id must be a positive resource identifier")
+        else:
+            if self.location is not None or self.resource_id is not None:
+                raise ValueError("ico payload must not carry a resource reference")
+            if not self.ico or not self.ico.startswith(ICO_MAGIC):
+                raise ValueError("ico payload must be non-empty ICO data")
+
+    @classmethod
+    def resource(cls, location: str, resource_id: int) -> IconPayload:
+        return cls(PayloadKind.RESOURCE, location=location, resource_id=resource_id)
+
+    @classmethod
+    def from_ico(cls, data: bytes) -> IconPayload:
+        return cls(PayloadKind.ICO, ico=bytes(data))

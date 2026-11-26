@@ -22,3 +22,7 @@ dist/
 # Editors
 .vscode/
 .idea/
+
+# Local data (portable mode in development) and parallel worktrees
+data/
+.worktrees/

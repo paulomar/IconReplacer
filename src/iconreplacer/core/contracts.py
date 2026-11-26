@@ -6,7 +6,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from iconreplacer.core.models import ActionResult, ApplyOptions, IconEntry, SourceInfo
+from iconreplacer.core.models import (
+    ActionResult,
+    ApplyOptions,
+    IconEntry,
+    IconPayload,
+    SourceInfo,
+)
 
 if TYPE_CHECKING:
     from PySide6.QtGui import QImage
@@ -26,6 +32,13 @@ class IconSource(Protocol):
     def render(self, entry: IconEntry, size: int) -> QImage:
         """Render ``entry`` as a square ARGB image of ``size`` pixels."""
         ...
+
+
+@runtime_checkable
+class IconMaterializer(Protocol):
+    """Turns a chosen icon (+ options) into what the folder service writes."""
+
+    def materialize(self, entry: IconEntry, options: ApplyOptions) -> IconPayload: ...
 
 
 @runtime_checkable
