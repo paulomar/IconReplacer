@@ -200,6 +200,31 @@ def test_about_shows_version_and_notices(qtbot):
     assert dlg.version_label.text() == f"Version {SHORT_VERSION} (build {BUILD})"
     assert "MIT License" in dlg.license_label.text()
     assert "PySide6" in dlg.notices_text() and "LGPL" in dlg.notices_text()
+    text = dlg.notices_text()
+    assert "icon converter" in text and "system icons" in text
+    assert "Third-party icon sources keep their own licenses." in text
+
+
+def test_new_strings_in_translation_template():
+    import xml.etree.ElementTree as ET
+
+    ts = Path(__file__).resolve().parents[1] / "src" / "iconreplacer" / "i18n"
+    root = ET.parse(ts / "iconreplacer_en.ts").getroot()
+    found = {
+        ctx.findtext("name"): {m.findtext("source") for m in ctx.iter("message")}
+        for ctx in root.iter("context")
+    }
+    expected = {
+        "TargetHeader": {"Choose folders…"},
+        "SettingsView": {"Explorer integration", "Register", "Re-register", "Unregister"},
+        "MainWindow": {"Fix Explorer integration", "Details…", "%1 of %2 changed."},
+        "SourceSidebar": {"Loading…", "Offline", "Error"},
+        "Reasons": {"System and program folders are protected.", "Nothing to undo."},
+        "FailureDetailsDialog": {"Folder", "Reason"},
+        "AboutDialog": {"Third-party icon sources keep their own licenses."},
+    }
+    for ctx, strings in expected.items():
+        assert not strings - found.get(ctx, set()), (ctx, strings - found.get(ctx, set()))
 
 
 # 4.7 main window -------------------------------------------------------------------

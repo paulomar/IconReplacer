@@ -53,8 +53,18 @@ class AboutDialog(QDialog):
             "Windows system icons are referenced in place from your Windows installation "
             "and are not redistributed."
         )
-        self.notices.setHtml(f"<table cellpadding='3'>{rows}</table><p>{disclaimer}</p>")
-        self.notices.setMaximumHeight(150)
+        converter = self.tr(
+            "The icon converter (SVG, PNG, JPEG, BMP, WebP, ICO and ICNS to ICO) is part of "
+            "IconReplacer (MIT License) and uses only Qt."
+        )
+        system_data = self.tr(
+            "The names, categories and tags of system icons are curated by IconReplacer "
+            "(MIT License); the icon artwork stays in your Windows installation."
+        )
+        sources = self.tr("Third-party icon sources keep their own licenses.")
+        paragraphs = "".join(f"<p>{t}</p>" for t in (disclaimer, converter, system_data, sources))
+        self.notices.setHtml(f"<table cellpadding='3'>{rows}</table>{paragraphs}")
+        self.notices.setMinimumHeight(190)
         lay.addWidget(self.notices)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)

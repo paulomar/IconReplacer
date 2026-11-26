@@ -129,9 +129,8 @@ class SourceSidebar(QTreeWidget):
                 item = QTreeWidgetItem(header, [info.name])
                 item.setData(0, SOURCE_ROLE, info.id)
                 item.setData(0, DESC_ROLE, info.description)
-                item.setData(0, COUNT_ROLE, len(src.entries()))
-                item.setToolTip(0, f"{info.name}\n{info.description}\n{info.license}")
                 self._items[info.id] = item
+                self._update_item(item, src)
             header.setExpanded(True)
         self.setCurrentItem(all_item)
         self.blockSignals(False)

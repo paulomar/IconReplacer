@@ -65,6 +65,11 @@ CONFIRM_LIST_LIMIT = 15
 LocalSourceFactory = Callable[[Path], IconSource]
 
 
+def english_plural(text: str, n: int) -> str:
+    """Resolve the "(s)" of an untranslated numerus source string (translations have none)."""
+    return text.replace("(s)", "" if n == 1 else "s")
+
+
 def geometry_fits(frame: QRect, screens: Sequence[QRect]) -> bool:
     """True if enough of the window frame lies on some screen to be reachable."""
     for screen in screens:
@@ -533,7 +538,8 @@ class MainWindow(QMainWindow):
         self._update_status()
 
     def _update_status(self, *_args) -> None:
-        self.statusBar().showMessage(self.tr("%n icon(s) shown", "", self.grid.visible_count()))
+        n = self.grid.visible_count()
+        self.statusBar().showMessage(english_plural(self.tr("%n icon(s) shown", "", n), n))
 
     # -- banner ----------------------------------------------------------------
     def show_banner(
@@ -593,7 +599,7 @@ class MainWindow(QMainWindow):
 
     # -- folder actions ----------------------------------------------------------
     def _folders_text(self, n: int) -> str:
-        return self.tr("%n folder(s)", "", n)
+        return english_plural(self.tr("%n folder(s)", "", n), n)
 
     def _confirm_batch(self, question: str, folders: Sequence[Path]) -> bool:
         shown = [str(f) for f in folders[:CONFIRM_LIST_LIMIT]]
