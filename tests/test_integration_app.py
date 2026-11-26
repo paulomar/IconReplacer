@@ -317,8 +317,50 @@ def test_normal_wiring_is_real(qtbot, monkeypatch, launcher):
     )
     qtbot.addWidget(w)
     assert isinstance(w.service, WindowsFolderIconService)
-    assert not w.settings_view.add_folder_btn.isVisibleTo(w.settings_view)  # no local factory
-    assert app_module.extra_sources_factory(InMemorySettingsStore()) == []
+    assert w.settings_view.add_folder_btn.isVisibleTo(w.settings_view)  # real local factory
+    assert app_module.extra_sources_factory is app_module.real_extra_sources
+    assert app_module.local_source_factory is app_module.real_local_source
+
+
+def test_real_extra_sources_are_lazy_and_complete(qtbot, monkeypatch, tmp_path):
+    from iconreplacer.catalog import net
+    from iconreplacer.catalog.external import shutdown_all
+    from iconreplacer.core import paths
+
+    monkeypatch.setenv(paths.ENV_HOME, str(tmp_path))
+    paths.reset_cache()
+    calls: list[str] = []
+    monkeypatch.setattr(net.HttpClient, "get", lambda self, *a, **k: calls.append("get"))
+    sources = app_module.real_extra_sources(InMemorySettingsStore({"network.allowed": False}))
+    try:
+        ids = {s.info.id for s in sources}
+        assert {"iconify", "phosphor"} <= ids
+        assert any(i.startswith("gh-lavimahal") for i in ids)
+        assert any(i.startswith("gh-sameerasw") for i in ids)
+        assert calls == []  # building sources performs no network I/O
+    finally:
+        shutdown_all(sources)
+        paths.reset_cache()
+
+
+def test_real_local_source_factory(tmp_path):
+    from iconreplacer.core.models import Section
+
+    src = app_module.real_local_source(tmp_path)
+    try:
+        assert src.info.section is Section.LOCAL
+    finally:
+        src.close()
+
+
+def test_app_icon_renders_all_sizes(qtbot):
+    from iconreplacer.ui.app_icon import ICON_SIZES, app_icon, render
+
+    icon = app_icon()
+    assert not icon.isNull()
+    for size in ICON_SIZES:
+        img = render(size)
+        assert img.width() == size and img.pixelColor(size // 2, size // 2).alpha() > 0
 
 
 def test_demo_wiring_is_simulated(qtbot, monkeypatch):

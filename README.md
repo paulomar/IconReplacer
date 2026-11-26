@@ -5,7 +5,7 @@ the decades-old *Customize > Change Icon* dialog. Right-click a folder, choose
 **Replace Icon**, then browse icons by source and category, preview them from 16
 to 256 px and apply.
 
-> Status: **working application (pre-release)**. Icons come from the Windows system libraries
+> Status: **1.0** - real folder icons, system, online, GitHub and local sources.
 > (referenced in place), and Apply / Undo / Restore default really change the target folders.
 > Online, GitHub and local-folder sources are coming next.
 

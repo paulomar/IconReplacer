@@ -2,7 +2,7 @@
 
 Usage: uv run python tools/screenshots.py
 Runs on the real display (not offscreen). Nothing on the system is modified:
-- the system icon libraries are only read, and their index cache goes to a temporary home;
+- icons come from the procedural demo catalog (no third-party artwork is committed);
 - target folders are demo paths and every folder action goes to a simulated service;
 - Explorer registration uses an in-memory registry backend;
 - settings live in memory only.
@@ -53,7 +53,9 @@ def main() -> int:
     os.environ["ICONREPLACER_HOME"] = home  # system index cache goes to a throwaway home
     os.environ.pop("ICONREPLACER_DEMO", None)
 
-    from iconreplacer.app import MemoryRegistryBackend, build_registry, create_window
+    from iconreplacer.app import MemoryRegistryBackend, create_window
+    from iconreplacer.catalog.mock_source import build_mock_sources
+    from iconreplacer.catalog.registry import SourceRegistry
     from iconreplacer.shell.registration import COMMAND_KEY, VERB_KEY, ShellRegistration
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -66,7 +68,9 @@ def main() -> int:
     backend.write_values(VERB_KEY, {"": "Replace Icon", "MUIVerb": "Replace Icon", "Icon": moved})
     backend.write_values(COMMAND_KEY, {"": f'"{moved}" --folder "%1"'})
     settings = InMemorySettingsStore({"network.allowed": True})
-    registry = build_registry(settings)
+    # Committed screenshots must not redistribute third-party artwork (Microsoft system
+    # icons, unlicensed GitHub packs): use the procedural demo catalog, same source ids.
+    registry = SourceRegistry(build_mock_sources())
     service = DemoService()
     w = create_window(
         CliOptions(folders=DEMO_FOLDERS),

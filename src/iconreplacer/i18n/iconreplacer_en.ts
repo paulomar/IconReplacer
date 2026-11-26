@@ -278,57 +278,57 @@
 <context>
     <name>PreviewPanel</name>
     <message>
-        <location filename="../ui/preview_panel.py" line="63"/>
+        <location filename="../ui/preview_panel.py" line="64"/>
         <source>Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="81"/>
+        <location filename="../ui/preview_panel.py" line="82"/>
         <source>Compose on folder base</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="89"/>
+        <location filename="../ui/preview_panel.py" line="90"/>
         <source>Tint</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="103"/>
+        <location filename="../ui/preview_panel.py" line="104"/>
         <source>Custom color</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="128"/>
+        <location filename="../ui/preview_panel.py" line="140"/>
         <source>Name</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="129"/>
+        <location filename="../ui/preview_panel.py" line="141"/>
         <source>Source</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="130"/>
+        <location filename="../ui/preview_panel.py" line="142"/>
         <source>Identifier</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="131"/>
+        <location filename="../ui/preview_panel.py" line="143"/>
         <source>Categories</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="132"/>
+        <location filename="../ui/preview_panel.py" line="144"/>
         <source>License</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="136"/>
+        <location filename="../ui/preview_panel.py" line="148"/>
         <source>Select an icon to preview it</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="212"/>
+        <location filename="../ui/preview_panel.py" line="226"/>
         <source>Folder tint</source>
         <translation type="unfinished"></translation>
     </message>

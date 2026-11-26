@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QScrollArea,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -125,6 +126,17 @@ class PreviewPanel(QFrame):
         self.cat_label.setWordWrap(True)
         self.license_label = QLabel("—")
         self.license_label.setWordWrap(True)
+        # Long values (URLs, paths, licenses) must wrap instead of widening the panel.
+        for value in (
+            self.name_label,
+            self.source_label,
+            self.ref_label,
+            self.cat_label,
+            self.license_label,
+        ):
+            value.setWordWrap(True)
+            value.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            value.setMinimumWidth(40)
         form.addRow(self.tr("Name"), self.name_label)
         form.addRow(self.tr("Source"), self.source_label)
         form.addRow(self.tr("Identifier"), self.ref_label)
@@ -177,7 +189,9 @@ class PreviewPanel(QFrame):
         rid = f",-{entry.ref.resource_id}" if entry.ref.resource_id is not None else ""
         ref = f"{entry.ref.location}{rid}"
         # zero-width spaces after separators let long paths wrap inside the panel
-        self.ref_label.setText(ref.replace("\\", "\\" + ZWSP).replace("/", "/" + ZWSP))
+        self.ref_label.setText(
+            ref.replace("\\", "\\" + ZWSP).replace("/", "/" + ZWSP).replace(".", "." + ZWSP)
+        )
         self.ref_label.setToolTip(ref)
         self.cat_label.setText(", ".join(category_label(c) for c in sorted(entry.categories)))
         self.license_label.setText(entry.license)
