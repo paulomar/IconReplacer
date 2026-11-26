@@ -1,32 +1,24 @@
 schema: spec-driven
 
-# Project context (optional)
-# Add only constraints that should guide OpenSpec artifacts and workflows.
-# Include constraints an agent cannot infer by reading the code.
-# Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
-
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always state what is out of scope
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
-
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+context: |
+  IconReplacer: portable Windows 10/11 tool to replace folder icons via an
+  Explorer right-click "Replace Icon" entry and a modern, resizable Qt UI.
+  - All artifacts, code, comments, commits and docs in English.
+  - Stack: Python (uv-managed .venv), PySide6 widgets, pytest + pytest-qt, ruff.
+    Distribution is a portable PyInstaller onedir zip; no installer, no admin.
+  - License MIT: never add GPL/AGPL dependencies. Never redistribute Microsoft
+    icon artwork; reference system DLL icons in place by resource ID.
+  - Internal contracts live in src/iconreplacer/core/contracts.py; feature
+    changes plug in through them to stay parallelizable without conflicts.
+  - Versioning: MAJOR.MINOR.PATCH.BUILD in src/iconreplacer/version.py only.
+    BUILD +1 for every change merged into main (never resets); tag vX.Y.Z.B.
+  - Git: never commit on main directly; feat/... or fix/... branches/worktrees;
+    Conventional Commits; never push or rewrite history.
+  - Safety risk levels for any side effect during development and tests:
+    R0 project/.venv/scratch only -> allowed; R1 HKCU\Software\Classes\
+    Directory\shell\IconReplacer or test-created temp folders, with snapshot and
+    verified rollback -> allowed; R2 anything without guaranteed rollback ->
+    stop and ask the user; R3 admin/UAC, System32, HKLM, services -> forbidden.
+  - The app itself must never require elevation, must back up desktop.ini and
+    folder attributes before changes, offer undo, and refuse system folders.
+  - UI strings go through Qt tr(); English is the only shipped language.
