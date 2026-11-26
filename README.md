@@ -5,7 +5,7 @@ the decades-old *Customize > Change Icon* dialog. Right-click a folder, choose
 **Replace Icon**, then browse icons by source and category, preview them from 16
 to 256 px and apply.
 
-> Status: **UI prototype**. The data is mocked, and actions are simulated: nothing on
+> Status: **UI prototype (validated)**. The data is mocked, and actions are simulated: nothing on
 > your system is modified.
 
 ## Screenshots
@@ -13,8 +13,8 @@ to 256 px and apply.
 | Light | Dark |
 |---|---|
 | ![Main window, light](docs/screenshots/main-light.png) | ![Main window, dark](docs/screenshots/main-dark.png) |
-| ![Folder-base composition and batch targets](docs/screenshots/preview-compose-batch-dark.png) | ![Search and category filter](docs/screenshots/search-filter-dark.png) |
-| ![Settings with network off](docs/screenshots/settings-network-off-dark.png) | ![About](docs/screenshots/about-dark.png) |
+| ![Sources panel shown](docs/screenshots/sources-panel-dark.png) | ![Composition, batch targets and source indicator](docs/screenshots/preview-compose-batch-source-indicator-dark.png) |
+| ![Search and category filter](docs/screenshots/search-filter-dark.png) | ![Settings with network off](docs/screenshots/settings-network-off-dark.png) |
 
 Regenerate the screenshots with `uv run python tools/screenshots.py`.
 

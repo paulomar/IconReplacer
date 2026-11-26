@@ -24,8 +24,9 @@ from iconreplacer.ui.folder_base import DEFAULT_TINT, compose_on_folder
 from iconreplacer.ui.strings import category_label
 from iconreplacer.ui.theme import monospace_font
 
-PREVIEW_SIZES: tuple[int, ...] = (16, 24, 32, 48, 64, 128, 256)
-SMALL_SIZES = PREVIEW_SIZES[:-1]
+PREVIEW_SIZES: tuple[int, ...] = (16, 24, 32, 48, 64)
+HERO_SIZE = PREVIEW_SIZES[-1]
+ZWSP = chr(0x200B)  # zero-width space: allows line breaks inside long paths
 TINT_PRESETS = ("#F2C14E", "#3D8BFD", "#34C38F", "#F46A6A", "#A66CFF", "#8B939E", "#2B2F36")
 
 Renderer = Callable[[IconEntry, int], QImage]
@@ -37,7 +38,7 @@ class PreviewPanel(QFrame):
     def __init__(self, renderer: Renderer, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("panel")
-        self.setMinimumWidth(290)
+        self.setMinimumWidth(250)
         self._renderer = renderer
         self._entry: IconEntry | None = None
         self._tint = DEFAULT_TINT
@@ -63,26 +64,18 @@ class PreviewPanel(QFrame):
         title.setObjectName("h2")
         root.addWidget(title)
 
-        self.big = QLabel()
-        self.big.setFixedSize(256, 256)
-        self.big.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(self.big, 0, Qt.AlignmentFlag.AlignHCenter)
-
-        # 128 centered, then 16..64 in a single row
+        # all folder-relevant sizes side by side on a "stage", 64 being the largest
         self.size_labels: dict[int, QLabel] = {}
-        row128 = QHBoxLayout()
-        row128.addStretch(1)
-        row128.addLayout(self._size_cell(128))
-        row128.addStretch(1)
-        root.addLayout(row128)
-        small = QHBoxLayout()
-        small.setSpacing(10)
-        small.addStretch(1)
-        for s in SMALL_SIZES[:-1]:  # 16..64
-            small.addLayout(self._size_cell(s, box=SMALL_SIZES[-2]))
-        small.addStretch(1)
-        root.addLayout(small)
-        self.size_labels[256] = self.big
+        self.stage = QFrame()
+        self.stage.setObjectName("stage")
+        stage_lay = QHBoxLayout(self.stage)
+        stage_lay.setContentsMargins(12, 14, 12, 8)
+        stage_lay.setSpacing(12)
+        stage_lay.addStretch(1)
+        for s in PREVIEW_SIZES:
+            stage_lay.addLayout(self._size_cell(s, box=HERO_SIZE))
+        stage_lay.addStretch(1)
+        root.addWidget(self.stage)
 
         opts = QHBoxLayout()
         self.compose = QCheckBox(self.tr("Compose on folder base"))
@@ -99,7 +92,9 @@ class PreviewPanel(QFrame):
             b = QToolButton()
             b.setFixedSize(20, 20)
             b.setToolTip(hexcolor)
-            b.setStyleSheet(f"background:{hexcolor}; border-radius:10px; border:1px solid #0003;")
+            b.setStyleSheet(
+                f"background:{hexcolor}; border-radius:10px; border:1px solid rgba(0,0,0,0.25);"
+            )
             b.clicked.connect(lambda _=False, c=hexcolor: self.set_tint(c))
             tints.addWidget(b)
             self.tint_buttons.append(b)
@@ -180,7 +175,10 @@ class PreviewPanel(QFrame):
         self.name_label.setText(entry.name)
         self.source_label.setText(source_name or entry.source_id)
         rid = f",-{entry.ref.resource_id}" if entry.ref.resource_id is not None else ""
-        self.ref_label.setText(f"{entry.ref.location}{rid}")
+        ref = f"{entry.ref.location}{rid}"
+        # zero-width spaces after separators let long paths wrap inside the panel
+        self.ref_label.setText(ref.replace("\\", "\\" + ZWSP).replace("/", "/" + ZWSP))
+        self.ref_label.setToolTip(ref)
         self.cat_label.setText(", ".join(category_label(c) for c in sorted(entry.categories)))
         self.license_label.setText(entry.license)
         self._render()
@@ -206,7 +204,7 @@ class PreviewPanel(QFrame):
 
     def _set_enabled(self, on: bool) -> None:
         self.placeholder.setVisible(not on)
-        self.big.setVisible(on)
+        self.stage.setVisible(on)
         for w in (self.compose, self.custom_tint, *self.tint_buttons):
             w.setEnabled(on)
 
