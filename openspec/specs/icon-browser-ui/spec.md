@@ -117,11 +117,15 @@ By default the application SHALL use a light or dark appearance that matches the
 - **THEN** the window switches to the dark appearance immediately
 
 ### Requirement: Translatable user interface
-Every user-visible string SHALL go through the application's translation layer. English SHALL be the default and only shipped language. The language list in Settings SHALL be built from the translations that are available.
+Every user-visible string SHALL go through the application's translation layer. English SHALL be the default and only shipped language. The language list in Settings SHALL be built from the translations that are available. The selected language SHALL be persisted and SHALL take effect on the next start; when it is changed, Settings SHALL show a note that IconReplacer must be restarted to apply it. When no language is selected, the system language SHALL be used if a matching translation exists, otherwise English.
 
 #### Scenario: Strings are translatable
 - **WHEN** the translation extraction tool runs over the source
 - **THEN** every user-visible string of the main window, Settings and About appears in the generated translation template
+
+#### Scenario: Language change shows restart note
+- **WHEN** the user picks another language in Settings
+- **THEN** the choice is persisted and a note "Restart IconReplacer to apply the language" is shown
 
 ### Requirement: Sources sidebar toggle
 A "Sources" toggle control SHALL show and hide the sources sidebar. When the window is not maximized, showing the sidebar SHALL widen the window by the sidebar width, up to the available screen width. Hiding the sidebar SHALL narrow the window by the same amount. When the window is maximized, its size SHALL not change.
