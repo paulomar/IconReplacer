@@ -71,6 +71,7 @@ class IconFilterProxy(QSortFilterProxyModel):
         self._category: str | None = None
         self._search = ""
         self._available: frozenset[str] | None = None
+        self._search_exempt: frozenset[str] = frozenset()
 
     def _change(self, attr: str, value) -> None:
         if getattr(self, attr) == value:
@@ -91,6 +92,10 @@ class IconFilterProxy(QSortFilterProxyModel):
     def set_available_sources(self, ids: frozenset[str] | None) -> None:
         self._change("_available", ids)
 
+    def set_search_exempt(self, ids: frozenset[str]) -> None:
+        """Sources whose entries are already the result of a remote query for the search text."""
+        self._change("_search_exempt", frozenset(ids))
+
     def filterAcceptsRow(self, row: int, parent) -> bool:
         e: IconEntry = self.sourceModel().index(row, 0, parent).data(ENTRY_ROLE)
         if self._available is not None and e.source_id not in self._available:
@@ -99,6 +104,8 @@ class IconFilterProxy(QSortFilterProxyModel):
             return False
         if self._category is not None and self._category not in e.categories:
             return False
+        if e.source_id in self._search_exempt:
+            return True
         return not self._search or e.matches(self._search)
 
 
@@ -109,7 +116,7 @@ class IconDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self._renderer = renderer
         self._size = DEFAULT_THUMB
-        self._cache: OrderedDict[tuple[str, int], QPixmap] = OrderedDict()
+        self._cache: OrderedDict[tuple[str, str, int], QPixmap] = OrderedDict()
 
     @property
     def thumb_size(self) -> int:
@@ -123,7 +130,7 @@ class IconDelegate(QStyledItemDelegate):
         return QSize(w, self._size + CAPTION_H + 14)
 
     def pixmap(self, entry: IconEntry, size: int) -> QPixmap:
-        key = (entry.id, size)
+        key = (entry.source_id, entry.id, size)
         pm = self._cache.get(key)
         if pm is None:
             pm = QPixmap.fromImage(self._renderer(entry, size))
@@ -134,8 +141,13 @@ class IconDelegate(QStyledItemDelegate):
             self._cache.move_to_end(key)
         return pm
 
-    def clear_cache(self) -> None:
-        self._cache.clear()
+    def clear_cache(self, source_ids: set[str] | None = None) -> None:
+        """Drop cached thumbnails (all, or only those of ``source_ids``)."""
+        if source_ids is None:
+            self._cache.clear()
+            return
+        for key in [k for k in self._cache if k[0] in source_ids]:
+            del self._cache[key]
 
     def sizeHint(self, option, index) -> QSize:
         return self.cell_size()
@@ -219,6 +231,18 @@ class IconGrid(QWidget):
     def set_entries(self, entries: Sequence[IconEntry]) -> None:
         self.model.set_entries(entries)
         self._update_empty()
+
+    def current_entry(self) -> IconEntry | None:
+        idx = self.view.currentIndex()
+        return idx.data(ENTRY_ROLE) if idx.isValid() else None
+
+    def select_entry_id(self, entry_id: str) -> bool:
+        for row in range(self.proxy.rowCount()):
+            idx = self.proxy.index(row, 0)
+            if idx.data(ENTRY_ROLE).id == entry_id:
+                self.view.setCurrentIndex(idx)
+                return True
+        return False
 
     def set_thumb_size(self, size: int) -> None:
         self.delegate.set_thumb_size(size)

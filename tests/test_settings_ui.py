@@ -17,6 +17,7 @@ TS = Path(__file__).resolve().parents[1] / "src" / "iconreplacer" / "i18n" / "ic
 @pytest.fixture
 def store_path(tmp_path, monkeypatch):
     monkeypatch.setenv(paths.ENV_HOME, str(tmp_path))
+    monkeypatch.setenv("ICONREPLACER_DEMO", "1")  # mock catalog, simulated service, fake registry
     paths.reset_cache()
     yield paths.settings_path()
     paths.reset_cache()

@@ -1,8 +1,9 @@
-"""Settings tab: sources, network kill switch, language and theme."""
+"""Settings tab: sources, network kill switch, Explorer integration, language and theme."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -26,6 +27,9 @@ from iconreplacer.core.contracts import SettingsStore
 from iconreplacer.core.models import Section
 from iconreplacer.ui.strings import section_label
 from iconreplacer.ui.theme import ThemeMode
+
+if TYPE_CHECKING:
+    from iconreplacer.shell.registration import RegistrationStatus, ShellRegistration
 
 I18N_DIR = Path(__file__).resolve().parents[1] / "i18n"
 SOURCE_ROLE = Qt.ItemDataRole.UserRole + 20
@@ -52,11 +56,22 @@ class SettingsView(QWidget):
     theme_changed = Signal(str)
     language_changed = Signal(str)
     add_local_folder = Signal(Path)
+    registration_changed = Signal(object)  # RegistrationStatus | None
 
-    def __init__(self, registry: SourceRegistry, settings: SettingsStore, parent=None) -> None:
+    def __init__(
+        self,
+        registry: SourceRegistry,
+        settings: SettingsStore,
+        parent=None,
+        *,
+        registration: ShellRegistration | None = None,
+        local_folders_supported: bool = True,
+    ) -> None:
         super().__init__(parent)
         self._registry = registry
         self._settings = settings
+        self._registration = registration
+        self.registration_status: RegistrationStatus | None = None
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(12)
@@ -74,6 +89,7 @@ class SettingsView(QWidget):
         btns = QHBoxLayout()
         self.add_folder_btn = QPushButton(self.tr("Add local folder…"))
         self.add_folder_btn.clicked.connect(self._pick_folder)
+        self.add_folder_btn.setVisible(local_folders_supported)
         btns.addWidget(self.add_folder_btn)
         btns.addStretch(1)
         src_lay.addLayout(btns)
@@ -93,6 +109,36 @@ class SettingsView(QWidget):
         hint.setWordWrap(True)
         net_lay.addWidget(hint)
         root.addWidget(net_box)
+
+        # Explorer integration ---------------------------------------------
+        self.explorer_box = QGroupBox(self.tr("Explorer integration"))
+        ex_lay = QVBoxLayout(self.explorer_box)
+        status_row = QHBoxLayout()
+        status_caption = QLabel(self.tr("“Replace Icon” folder menu:"))
+        status_row.addWidget(status_caption)
+        self.registration_label = QLabel()
+        self.registration_label.setWordWrap(True)
+        self.registration_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        status_row.addWidget(self.registration_label, 1)
+        self.register_btn = QPushButton(self.tr("Register"))
+        self.register_btn.clicked.connect(self.register_verb)
+        status_row.addWidget(self.register_btn)
+        self.unregister_btn = QPushButton(self.tr("Unregister"))
+        self.unregister_btn.clicked.connect(self.unregister_verb)
+        status_row.addWidget(self.unregister_btn)
+        ex_lay.addLayout(status_row)
+        ex_hint = QLabel(
+            self.tr(
+                "Adds “Replace Icon” to the folder right-click menu for your account only. "
+                "On Windows 11 it appears under “Show more options”."
+            )
+        )
+        ex_hint.setObjectName("muted")
+        ex_hint.setWordWrap(True)
+        ex_lay.addWidget(ex_hint)
+        root.addWidget(self.explorer_box)
 
         # Appearance ---------------------------------------------------------
         ui_box = QGroupBox(self.tr("Appearance"))
@@ -121,6 +167,7 @@ class SettingsView(QWidget):
         root.addWidget(ui_box)
 
         self.rebuild_sources()
+        self.refresh_registration()
 
     # -- public ----------------------------------------------------------------
     def network_allowed(self) -> bool:
@@ -165,6 +212,63 @@ class SettingsView(QWidget):
         hdr.resizeSection(2, 260)
         self.sources.blockSignals(False)
         self._apply_network_state()
+
+    # -- Explorer integration --------------------------------------------------
+    def refresh_registration(self) -> RegistrationStatus | None:
+        from iconreplacer.shell.registration import RegistrationState
+
+        if self._registration is None:
+            self.registration_status = None
+            self.registration_label.setText(self.tr("Not available"))
+            self.register_btn.setEnabled(False)
+            self.unregister_btn.setEnabled(False)
+            return None
+        try:
+            status = self._registration.status()
+        except OSError as exc:
+            self.registration_status = None
+            self.registration_label.setText(
+                self.tr("Error: %1").replace("%1", str(exc.strerror or exc))
+            )
+            return None
+        self.registration_status = status
+        state = status.state
+        if state is RegistrationState.REGISTERED:
+            text = self.tr("Registered")
+        elif state is RegistrationState.STALE:
+            text = self.tr("Stale – points to another location")
+            if status.path:
+                text += "\n" + status.path
+        else:
+            text = self.tr("Not registered")
+        self.registration_label.setText(text)
+        self.register_btn.setText(
+            self.tr("Register")
+            if state is RegistrationState.NOT_REGISTERED
+            else self.tr("Re-register")
+        )
+        self.register_btn.setEnabled(True)
+        self.unregister_btn.setEnabled(state is not RegistrationState.NOT_REGISTERED)
+        return status
+
+    def _run_registration(self, op) -> None:
+        try:
+            op()
+        except OSError as exc:
+            self.refresh_registration()
+            self.registration_label.setText(
+                self.tr("Error: %1").replace("%1", str(exc.strerror or exc))
+            )
+            return
+        self.registration_changed.emit(self.refresh_registration())
+
+    def register_verb(self) -> None:
+        if self._registration is not None:
+            self._run_registration(self._registration.register)
+
+    def unregister_verb(self) -> None:
+        if self._registration is not None:
+            self._run_registration(self._registration.unregister)
 
     # -- internals -------------------------------------------------------------
     def _apply_network_state(self) -> None:

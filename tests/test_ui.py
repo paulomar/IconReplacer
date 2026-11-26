@@ -139,7 +139,12 @@ def test_glyph_icons_default_to_composition(window):
 
 
 # 4.5 target header + mocked actions ----------------------------------------------
-def test_batch_header_and_simulated_apply(window, tmp_path):
+def test_batch_header_and_simulated_apply(window, tmp_path, qtbot, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(
+        QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
+    )
     folders = [tmp_path / n for n in "ABC"]
     for f in folders:
         f.mkdir()
@@ -151,6 +156,7 @@ def test_batch_header_and_simulated_apply(window, tmp_path):
     w.grid.select_row(0)
     assert w.header.apply_btn.isEnabled()
     w.header.apply_btn.click()
+    qtbot.waitUntil(lambda: not w.runner.busy and w.last_result is not None)
     assert w.banner.isVisibleTo(w)
     assert "Nothing was changed" in w.banner_text.text()
     assert w.service.calls[-1].action == "apply"
@@ -194,6 +200,31 @@ def test_about_shows_version_and_notices(qtbot):
     assert dlg.version_label.text() == f"Version {SHORT_VERSION} (build {BUILD})"
     assert "MIT License" in dlg.license_label.text()
     assert "PySide6" in dlg.notices_text() and "LGPL" in dlg.notices_text()
+    text = dlg.notices_text()
+    assert "icon converter" in text and "system icons" in text
+    assert "Third-party icon sources keep their own licenses." in text
+
+
+def test_new_strings_in_translation_template():
+    import xml.etree.ElementTree as ET
+
+    ts = Path(__file__).resolve().parents[1] / "src" / "iconreplacer" / "i18n"
+    root = ET.parse(ts / "iconreplacer_en.ts").getroot()
+    found = {
+        ctx.findtext("name"): {m.findtext("source") for m in ctx.iter("message")}
+        for ctx in root.iter("context")
+    }
+    expected = {
+        "TargetHeader": {"Choose folders…"},
+        "SettingsView": {"Explorer integration", "Register", "Re-register", "Unregister"},
+        "MainWindow": {"Fix Explorer integration", "Details…", "%1 of %2 changed."},
+        "SourceSidebar": {"Loading…", "Offline", "Error"},
+        "Reasons": {"System and program folders are protected.", "Nothing to undo."},
+        "FailureDetailsDialog": {"Folder", "Reason"},
+        "AboutDialog": {"Third-party icon sources keep their own licenses."},
+    }
+    for ctx, strings in expected.items():
+        assert not strings - found.get(ctx, set()), (ctx, strings - found.get(ctx, set()))
 
 
 # 4.7 main window -------------------------------------------------------------------
