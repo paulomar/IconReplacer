@@ -126,3 +126,23 @@ def test_decompression_bomb_rejected_before_decoding():
 def test_large_raster_data_rejected():
     with pytest.raises(ConversionError, match="larger"):
         load_image(b"\x89PNG\r\n\x1a\n" + b"\0" * (20 * 1024 * 1024 + 1))
+
+
+def test_svg_with_non_utf8_encoding_rejected():
+    svg = (
+        b'<?xml version="1.0" encoding="ISO-8859-1"?>'
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4">'
+        b'<rect width="4" height="4"/></svg>'
+    )
+    with pytest.raises(ConversionError, match="UTF-8"):
+        load_image(svg)
+
+
+def test_svg_invalid_utf8_rejected():
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><title>'
+        + bytes([0xFF, 0xFE])
+        + b"</title></svg>"
+    )
+    with pytest.raises(ConversionError, match="UTF-8"):
+        load_image(svg)

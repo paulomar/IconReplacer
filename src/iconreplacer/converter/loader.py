@@ -26,6 +26,7 @@ _SVG_FORBIDDEN = (
 )
 _CSS_URL = re.compile(r"url\(\s*['\"]?\s*([^)'\"\s]*)", re.I)
 _CURRENT_COLOR = re.compile(rb"currentcolor", re.I)
+_XML_ENCODING = re.compile(rb"""<\?xml[^>]*encoding\s*=\s*["']([A-Za-z0-9._-]+)["']""", re.I)
 _DATA_URI = re.compile(r"^data:image/(png|jpeg);base64,[A-Za-z0-9+/=\s]*$", re.I)
 
 
@@ -90,6 +91,14 @@ def load_image(data: bytes, hint: str | None = None) -> SourceImage:
 def _validate_svg(data: bytes, label: str) -> bytes:
     if len(data) > MAX_SVG_BYTES:
         raise ConversionError(f"{label}: SVG larger than {MAX_SVG_BYTES // 1024} KiB limit")
+    # Byte-level checks below are only meaningful for UTF-8 (or ASCII) content.
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConversionError(f"{label}: SVG must be UTF-8 encoded") from exc
+    declared = _XML_ENCODING.search(data[:200])
+    if declared and declared.group(1).lower().replace(b"_", b"-") not in (b"utf-8", b"us-ascii"):
+        raise ConversionError(f"{label}: SVG must be UTF-8 encoded")
     for pattern, message in _SVG_FORBIDDEN:
         if pattern.search(data):
             raise ConversionError(f"{label}: {message}")
