@@ -33,9 +33,33 @@ def no_extra_sources(_settings: SettingsStore) -> list[IconSource]:
     return []
 
 
-# Integration hooks. A later change points them at the online/GitHub/local source factories.
-extra_sources_factory: ExtraSourcesFactory = no_extra_sources
-local_source_factory: LocalSourceFactory | None = None
+def real_extra_sources(settings: SettingsStore) -> list[IconSource]:
+    """Iconify, Phosphor and the default GitHub repositories (lazy: no I/O until used).
+
+    Local folders are restored by MainWindow through ``local_source_factory``.
+    """
+    from iconreplacer.catalog.external import build_external_sources
+
+    return list(build_external_sources(network_allowed=bool(settings.get("network.allowed", True))))
+
+
+def real_local_source(path: Path) -> IconSource:
+    from iconreplacer.catalog.local_source import LocalFolderSource
+
+    return LocalFolderSource(path)
+
+
+def shutdown_sources(registry: SourceRegistry) -> None:
+    """Stop background network/scan work without waiting for in-flight requests."""
+    from iconreplacer.catalog.external import shutdown_all
+    from iconreplacer.catalog.external_base import ExternalSourceBase
+
+    shutdown_all([s for s in registry.sources() if isinstance(s, ExternalSourceBase)])
+
+
+# Integration hooks (injectable for tests).
+extra_sources_factory: ExtraSourcesFactory = real_extra_sources
+local_source_factory: LocalSourceFactory | None = real_local_source
 
 
 def demo_mode() -> bool:
@@ -167,11 +191,15 @@ def run(options: CliOptions) -> int:
     server = acquire(options.folders)  # single instance: forward folders to a running one
     if server is None:
         return 0
+    from iconreplacer.ui.app_icon import app_icon
+
+    app.setWindowIcon(app_icon())
     settings = JsonSettingsStore()
     install_translator(app, settings.get("ui.language", ""))
     options = replace(options, folders=tuple(collect_startup_folders(server, options.folders)))
     window = create_window(options, app, settings)
     server.folders_received.connect(lambda new: append_folders(window, new))
     app.aboutToQuit.connect(settings.save)
+    app.aboutToQuit.connect(lambda: shutdown_sources(window.registry))
     window.show()
     return app.exec()
