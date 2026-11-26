@@ -98,11 +98,16 @@ class SettingsView(QWidget):
         ui_box = QGroupBox(self.tr("Appearance"))
         form = QFormLayout(ui_box)
         self.language = QComboBox()
+        self.language.addItem(self.tr("System default"), "")
         for code, name in available_languages():
             self.language.addItem(name, code)
-        self.language.currentIndexChanged.connect(
-            lambda _i: self.language_changed.emit(self.language.currentData())
-        )
+        self._language_at_start = str(settings.get("ui.language", "") or "")
+        self.language.setCurrentIndex(max(0, self.language.findData(self._language_at_start)))
+        self.language.currentIndexChanged.connect(self._on_language)
+        self.language_note = QLabel(self.tr("Restart IconReplacer to apply the language"))
+        self.language_note.setObjectName("muted")
+        self.language_note.setWordWrap(True)
+        self.language_note.setVisible(False)
         self.theme = QComboBox()
         self.theme.addItem(self.tr("System"), ThemeMode.SYSTEM.value)
         self.theme.addItem(self.tr("Light"), ThemeMode.LIGHT.value)
@@ -111,6 +116,7 @@ class SettingsView(QWidget):
         self.theme.setCurrentIndex(max(0, self.theme.findData(current)))
         self.theme.currentIndexChanged.connect(self._on_theme)
         form.addRow(self.tr("Language"), self.language)
+        form.addRow("", self.language_note)
         form.addRow(self.tr("Theme"), self.theme)
         root.addWidget(ui_box)
 
@@ -179,7 +185,18 @@ class SettingsView(QWidget):
         if sid is None or column != 0:
             return
         self._registry.set_enabled(sid, item.checkState(0) == Qt.CheckState.Checked)
+        known = {s.info.id for s in self._registry.sources()}
+        # keep ids of sources that are not registered right now (e.g. a missing local folder)
+        disabled = [d for d in self._settings.get("sources.disabled", []) if d not in known]
+        disabled += [i for i in sorted(known) if not self._registry.is_enabled(i)]
+        self._settings.set("sources.disabled", disabled)
         self.sources_changed.emit()
+
+    def _on_language(self, _i: int) -> None:
+        code = str(self.language.currentData() or "")
+        self._settings.set("ui.language", code)
+        self.language_note.setVisible(code != self._language_at_start)
+        self.language_changed.emit(code)
 
     def _on_theme(self, _i: int) -> None:
         mode = self.theme.currentData()
