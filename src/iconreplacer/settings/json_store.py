@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import json
 import logging
 import os
@@ -176,8 +177,6 @@ class JsonSettingsStore:
         except OSError as exc:
             log.warning("Could not save settings %s: %s", self.path, exc)
             if tmp_name:
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(tmp_name)
-                except OSError:
-                    pass
             return False

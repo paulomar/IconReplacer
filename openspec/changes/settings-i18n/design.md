@@ -15,9 +15,8 @@
 - Geometry is stored as base64 `saveGeometry()` and restored only if the resulting window frame intersects an available screen geometry enough to be reachable; otherwise the default size is kept.
 - Language: `ui.language` empty resolves to the system locale if a `.qm` exists, else English. A restart note label in Settings is shown when the combo changes.
 - `tools/update_translations.py --release` runs `pyside6-lrelease` for every `.ts` into the i18n directory; `.qm` stays git-ignored.
-- Disabled sources are persisted by id; local folders are stored but source re-creation from them is left to the later real local-source change.
+- Disabled sources are persisted by id; local folders are persisted and re-registered at startup as the prototype mock local sources.
 
 ## Risks / Trade-offs
 
 - Synchronous save on every set could be slow for frequent changes such as the size slider; the slider persists on release/close only is not needed given tiny file size, but it is saved on value change. Acceptable.
-- Mock local sources are not re-created from `sources.local_folders` yet.
