@@ -4,17 +4,17 @@
 
 ## 2. Loading and safety
 
-- [ ] 2.1 Implement `load_image` with magic-byte detection, SVG hardening, raster limits. Verify: `tests/test_converter_load.py`.
+- [x] 2.1 Implement `load_image` with magic-byte detection, SVG hardening, raster limits. Verify: `tests/test_converter_load.py`.
 
 ## 3. Adaptation
 
-- [ ] 3.1 Implement trim/pad/square, glyph detection, small-size rendering and downscaling. Verify: `tests/test_converter_adapt.py`.
+- [x] 3.1 Implement trim/pad/square, glyph detection, small-size rendering and downscaling. Verify: `tests/test_converter_adapt.py`.
 
 ## 4. ICO and pipeline
 
-- [ ] 4.1 Implement `build_ico` and `convert_to_ico` with composition. Verify: `tests/test_converter_ico.py` round-trips every size.
-- [ ] 4.2 Implement `ConverterMaterializer`. Verify: `tests/test_converter_materializer.py`.
+- [x] 4.1 Implement `build_ico` and `convert_to_ico` with composition. Verify: `tests/test_converter_ico.py` round-trips every size.
+- [x] 4.2 Implement `ConverterMaterializer`. Verify: `tests/test_converter_materializer.py`.
 
 ## 5. Finish
 
-- [ ] 5.1 `uv run pytest -q`, `uv run ruff check`, `uv run ruff format --check`, `openspec validate icon-converter --strict` all pass.
+- [x] 5.1 `uv run pytest -q`, `uv run ruff check`, `uv run ruff format --check`, `openspec validate icon-converter --strict` all pass.

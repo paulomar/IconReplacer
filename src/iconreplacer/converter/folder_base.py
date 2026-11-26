@@ -68,8 +68,22 @@ def recolor(image: QImage, color: QColor) -> QImage:
     return out
 
 
-def compose_on_folder(glyph: QImage, size: int, tint: str | QColor = DEFAULT_TINT) -> QImage:
-    """Draw ``glyph`` centered on the front panel of a tinted folder of ``size`` px."""
+def glyph_box(size: int) -> int:
+    """Edge in pixels of the square the glyph occupies on a folder of ``size`` px."""
+    return max(1, round(size * GLYPH_SCALE * 0.72))
+
+
+def compose_on_folder(
+    glyph: QImage,
+    size: int,
+    tint: str | QColor = DEFAULT_TINT,
+    recolor_glyph: bool = True,
+) -> QImage:
+    """Draw ``glyph`` centered on the front panel of a tinted folder of ``size`` px.
+
+    With ``recolor_glyph`` (default) the glyph is painted in a contrasting ink; set it to
+    False to keep the artwork's own colours.
+    """
     color = QColor(tint)
     img = _blank(size)
     p = QPainter(img)
@@ -77,10 +91,12 @@ def compose_on_folder(glyph: QImage, size: int, tint: str | QColor = DEFAULT_TIN
     p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     draw_folder(p, size, color)
     front = front_panel_rect(size)
-    g = max(1, round(size * GLYPH_SCALE * 0.72))
+    g = glyph_box(size)
     target = QRectF(front.center().x() - g / 2, front.center().y() - g / 2, g, g)
-    # recolor glyph to a contrasting tone so it reads at small sizes
-    ink = QColor(color).darker(260) if color.lightness() > 110 else QColor(255, 255, 255)
-    p.drawImage(target, recolor(glyph, ink))
+    if recolor_glyph:
+        # recolor glyph to a contrasting tone so it reads at small sizes
+        ink = QColor(color).darker(260) if color.lightness() > 110 else QColor(255, 255, 255)
+        glyph = recolor(glyph, ink)
+    p.drawImage(target, glyph)
     p.end()
     return img
