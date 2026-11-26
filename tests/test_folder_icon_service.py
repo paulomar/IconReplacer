@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -22,6 +23,7 @@ from iconreplacer.services import win32_shell as w
 from iconreplacer.services.folder_icon_service import (
     HISTORY_LIMIT,
     WindowsFolderIconService,
+    icon_file_name,
 )
 
 SHELL32 = "%SystemRoot%\\System32\\shell32.dll"
@@ -103,6 +105,11 @@ def tree_state(folder: Path) -> list[tuple]:
     return sorted(state, key=lambda t: t[0])
 
 
+def icons(folder: Path) -> list[str]:
+    store = folder / ".iconreplacer"
+    return sorted(p.name for p in store.glob("*.ico")) if store.is_dir() else []
+
+
 def ini_text(folder: Path) -> str:
     data = (folder / "desktop.ini").read_bytes()
     if data.startswith(b"\xff\xfe"):
@@ -154,7 +161,7 @@ def test_apply_resource_payload(work, shell):
     assert has(folder / "desktop.ini", w.FILE_ATTRIBUTE_HIDDEN)
     assert has(folder / "desktop.ini", w.FILE_ATTRIBUTE_SYSTEM)
     assert has(folder, w.FILE_ATTRIBUTE_READONLY)
-    assert not (folder / ".iconreplacer" / "icon.ico").exists()
+    assert icons(folder) == []
     assert (folder / ".iconreplacer" / "history.json").is_file()
     assert shell.notified == [folder.resolve()]
     assert shell.api_calls == 1
@@ -165,10 +172,23 @@ def test_apply_ico_payload(work):
     ico = make_ico()
     assert service(IconPayload.from_ico(ico)).apply([folder], ENTRY, OPTS).ok
     store = folder / ".iconreplacer"
-    assert (store / "icon.ico").read_bytes() == ico
+    name = f"icon-{hashlib.sha256(ico).hexdigest()[:12]}.ico"
+    assert icon_file_name(ico) == name
+    assert icons(folder) == [name]
+    assert (store / name).read_bytes() == ico
     assert has(store, w.FILE_ATTRIBUTE_HIDDEN) and has(store, w.FILE_ATTRIBUTE_SYSTEM)
-    assert ini_text(folder) == "[.ShellClassInfo]\r\nIconResource=.iconreplacer\\icon.ico,0\r\n"
+    assert ini_text(folder) == f"[.ShellClassInfo]\r\nIconResource=.iconreplacer\\{name},0\r\n"
     assert [p.name for p in store.iterdir() if p.suffix == ".tmp"] == []
+
+
+def test_reapplying_different_ico_changes_file_name(work):
+    folder = folder_in(work)
+    first, second = make_ico(b"\x01\x02\x03\xff"), make_ico(b"\x09\x08\x07\xff")
+    service(IconPayload.from_ico(first)).apply([folder], ENTRY, OPTS)
+    service(IconPayload.from_ico(second)).apply([folder], ENTRY, OPTS)
+    assert icon_file_name(first) != icon_file_name(second)
+    assert icons(folder) == [icon_file_name(second)]  # old file removed
+    assert f"IconResource=.iconreplacer\\{icon_file_name(second)},0" in ini_text(folder)
 
 
 def test_ico_reference_survives_moving_the_folder(work):
@@ -179,7 +199,7 @@ def test_ico_reference_survives_moving_the_folder(work):
     moved.parent.mkdir()
     os.rename(folder, moved)
     assert (moved / "desktop.ini").read_bytes() == before
-    assert (moved / ".iconreplacer" / "icon.ico").is_file()
+    assert len(icons(moved)) == 1
 
 
 def test_apply_preserves_unrelated_keys_and_drops_legacy_icon_keys(work):
@@ -249,7 +269,7 @@ def test_unicode_folder_with_ico(work):
     folder = folder_in(work, "Документы ✓")
     svc = service(IconPayload.from_ico(make_ico()))
     assert svc.apply([folder], ENTRY, OPTS).ok
-    assert (folder / ".iconreplacer" / "icon.ico").is_file()
+    assert len(icons(folder)) == 1
     assert svc.restore_default([folder]).ok
     assert list(folder.iterdir()) == []
 
@@ -259,10 +279,11 @@ def test_repeated_apply_is_idempotent(work):
     svc = service(IconPayload.from_ico(make_ico()))
     svc.apply([folder], ENTRY, OPTS)
     first_ini = (folder / "desktop.ini").read_bytes()
-    first_icon = (folder / ".iconreplacer" / "icon.ico").read_bytes()
+    first_icons = icons(folder)
     svc.apply([folder], ENTRY, OPTS)
     assert (folder / "desktop.ini").read_bytes() == first_ini
-    assert (folder / ".iconreplacer" / "icon.ico").read_bytes() == first_icon
+    assert icons(folder) == first_icons  # same bytes -> same name
+    assert (folder / ".iconreplacer" / first_icons[0]).read_bytes() == make_ico()
     assert ini_text(folder).count("IconResource=") == 1
 
 
@@ -344,9 +365,11 @@ def test_undo_second_apply_restores_first(work):
     after_first = tree_state(folder)
     svc = service(IconPayload.from_ico(second))
     svc.apply([folder], ENTRY, OPTS)
-    assert (folder / ".iconreplacer" / "icon.ico").read_bytes() == second
+    assert icons(folder) == [icon_file_name(second)]
     assert svc.undo([folder]).ok
-    assert (folder / ".iconreplacer" / "icon.ico").read_bytes() == first
+    assert icons(folder) == [icon_file_name(first)]  # old name and content are back
+    assert (folder / ".iconreplacer" / icon_file_name(first)).read_bytes() == first
+    assert f"\\{icon_file_name(first)},0" in ini_text(folder)
     state = [t for t in tree_state(folder) if not t[0].endswith("history.json")]
     assert state == [t for t in after_first if not t[0].endswith("history.json")]
 
@@ -357,10 +380,10 @@ def test_undo_resource_after_ico_restores_icon_file(work):
     service(IconPayload.from_ico(ico)).apply([folder], ENTRY, OPTS)
     svc = service(resource())
     svc.apply([folder], ENTRY, OPTS)
-    assert not (folder / ".iconreplacer" / "icon.ico").exists()
+    assert icons(folder) == []
     assert svc.undo([folder]).ok
-    assert (folder / ".iconreplacer" / "icon.ico").read_bytes() == ico
-    assert "icon.ico,0" in ini_text(folder)
+    assert (folder / ".iconreplacer" / icon_file_name(ico)).read_bytes() == ico
+    assert f"{icon_file_name(ico)},0" in ini_text(folder)
 
 
 def test_nothing_to_undo(work):

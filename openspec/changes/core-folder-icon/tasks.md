@@ -18,6 +18,7 @@
 - [x] 4.1 Implement `WindowsFolderIconService.apply` (resource and ICO payloads, API with fallback writer, Explorer notification, batch aggregation) and verify the apply, preservation, unicode, idempotence, fallback-writer and batch tests in `tests/test_folder_icon_service.py` pass
 - [x] 4.2 Implement `undo` and verify the byte-identical undo tests (first apply, second apply, nothing to undo) pass
 - [x] 4.3 Implement `restore_default` and verify the cleanup and keep-other-keys tests pass
+- [x] 4.4 Store ICO payloads as content-addressed `icon-<sha256[:12]>.ico`, delete unreferenced `icon-*.ico` on apply and snapshot every icon file name and its bytes; verify these tests pass: `test_reapplying_different_ico_changes_file_name`, `test_undo_second_apply_restores_first` (old name and file back) and `test_repeated_apply_is_idempotent` (same name)
 
 ## 5. Integration checks
 

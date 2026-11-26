@@ -3,7 +3,7 @@
 Per folder layout::
 
     <folder>\\desktop.ini                 [.ShellClassInfo] IconResource=...
-    <folder>\\.iconreplacer\\icon.ico      generated icon (ICO payloads only)
+    <folder>\\.iconreplacer\\icon-<sha256[:12]>.ico  generated icon (ICO payloads only)
     <folder>\\.iconreplacer\\history.json  bounded snapshots for undo
 """
 
@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import binascii
 import contextlib
+import hashlib
 import json
 import os
 import shutil
@@ -33,14 +34,14 @@ from iconreplacer.services.folder_safety import UnsafeFolderError, check_folder
 
 DESKTOP_INI = "desktop.ini"
 STORE_DIR = ".iconreplacer"
-ICON_NAME = "icon.ico"
+ICON_PATTERN = "icon-*.ico"
+ICON_HASH_CHARS = 12
 HISTORY_NAME = "history.json"
 HISTORY_LIMIT = 10
 HISTORY_VERSION = 1
 SHELL_SECTION = ".ShellClassInfo"
 ICON_KEYS = ("IconResource", "IconFile", "IconIndex")
 LEGACY_ICON_KEYS = ("IconFile", "IconIndex")
-RELATIVE_ICON = f"{STORE_DIR}\\{ICON_NAME}"
 OWNABLE_FOLDER_BITS = w.FILE_ATTRIBUTE_READONLY | w.FILE_ATTRIBUTE_SYSTEM
 
 _UTF16_BOM = b"\xff\xfe"
@@ -201,13 +202,13 @@ class Snapshot:
     desktop_ini: bytes | None
     desktop_ini_attributes: int | None
     folder_attributes: int
-    icon: bytes | None
+    icons: tuple[tuple[str, bytes], ...]  # (file name, bytes) of stored icon-*.ico files
     store_existed: bool
 
     def to_json(self) -> dict:
         data = asdict(self)
         data["desktop_ini"] = _b64(self.desktop_ini)
-        data["icon"] = _b64(self.icon)
+        data["icons"] = {name: _b64(blob) for name, blob in self.icons}
         return data
 
     @classmethod
@@ -216,7 +217,7 @@ class Snapshot:
             desktop_ini=_unb64(data["desktop_ini"]),
             desktop_ini_attributes=data["desktop_ini_attributes"],
             folder_attributes=int(data["folder_attributes"]),
-            icon=_unb64(data["icon"]),
+            icons=tuple(sorted((str(n), base64.b64decode(b)) for n, b in data["icons"].items())),
             store_existed=bool(data["store_existed"]),
         )
 
@@ -256,6 +257,15 @@ def _read_optional(path: Path) -> bytes | None:
         return path.read_bytes()
     except FileNotFoundError:
         return None
+
+
+def icon_file_name(ico: bytes) -> str:
+    """Content-addressed name, so Explorer's path-keyed icon cache sees a new file."""
+    return f"icon-{hashlib.sha256(ico).hexdigest()[:ICON_HASH_CHARS]}.ico"
+
+
+def _icon_files(store: Path) -> list[Path]:
+    return sorted(store.glob(ICON_PATTERN)) if store.is_dir() else []
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
@@ -376,9 +386,14 @@ class WindowsFolderIconService:
             desktop_ini=_read_optional(ini),
             desktop_ini_attributes=self._files.attrs_or_none(ini),
             folder_attributes=self._shell.get_attributes(folder),
-            icon=_read_optional(store / ICON_NAME),
+            icons=tuple((p.name, p.read_bytes()) for p in _icon_files(store)),
             store_existed=store.is_dir(),
         )
+
+    def _keep_only_icons(self, store: Path, keep: set[str]) -> None:
+        for path in _icon_files(store):
+            if path.name not in keep:
+                self._files.unlink(path)
 
     def _restore_snapshot(self, folder: Path, snap: Snapshot, history: History) -> None:
         ini = folder / DESKTOP_INI
@@ -390,10 +405,9 @@ class WindowsFolderIconService:
         if not snap.store_existed:
             self._files.remove_tree(store)
         else:
-            if snap.icon is None:
-                self._files.unlink(store / ICON_NAME)
-            else:
-                self._files.write(store / ICON_NAME, snap.icon, None)
+            self._keep_only_icons(store, {name for name, _ in snap.icons})
+            for name, blob in snap.icons:
+                self._files.write(store / name, blob, None)
             history.save(store)
         self._files.set_folder_bits(
             folder, ~w.SETTABLE_ATTRIBUTES, snap.folder_attributes & w.SETTABLE_ATTRIBUTES
@@ -444,11 +458,14 @@ class WindowsFolderIconService:
             history.save(store)
             if payload.kind is PayloadKind.ICO:
                 assert payload.ico is not None
-                self._files.write(store / ICON_NAME, payload.ico, None)
-                self._write_icon_resource(folder, RELATIVE_ICON, 0)
+                name = icon_file_name(payload.ico)
+                if _read_optional(store / name) != payload.ico:
+                    self._files.write(store / name, payload.ico, None)
+                self._write_icon_resource(folder, f"{STORE_DIR}\\{name}", 0)
+                self._keep_only_icons(store, {name})
             else:
                 assert payload.location is not None and payload.resource_id is not None
-                self._files.unlink(store / ICON_NAME)
+                self._keep_only_icons(store, set())
                 self._write_icon_resource(folder, payload.location, -payload.resource_id)
             added = self._shell.get_attributes(folder) & ~snap.folder_attributes
             if added & OWNABLE_FOLDER_BITS:

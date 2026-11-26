@@ -14,11 +14,15 @@ When the chosen icon resolves to an icon resource inside a DLL or EXE, the syste
 - **THEN** the folder's desktop.ini contains `IconResource=%SystemRoot%\System32\shell32.dll,-4` under `[.ShellClassInfo]`
 
 ### Requirement: Apply a generated ICO icon portably
-When the chosen icon resolves to ICO data, the system SHALL store the data as `.iconreplacer\icon.ico` inside the target folder, replacing any earlier copy atomically. It SHALL reference that file with the relative path `.iconreplacer\icon.ico,0`, and it SHALL mark the `.iconreplacer` directory Hidden and System.
+When the chosen icon resolves to ICO data, the system SHALL store the data atomically as `.iconreplacer\icon-<h>.ico` inside the target folder, where `<h>` is the first 12 hex digits of the data's SHA-256. It SHALL reference that file with the relative path `.iconreplacer\icon-<h>.ico,0` and SHALL delete stored `icon-*.ico` files that are no longer referenced. It SHALL mark the `.iconreplacer` directory Hidden and System.
 
 #### Scenario: ICO payload
 - **WHEN** ICO data is applied to a folder
-- **THEN** `<folder>\.iconreplacer\icon.ico` contains exactly that data and desktop.ini contains `IconResource=.iconreplacer\icon.ico,0`
+- **THEN** `<folder>\.iconreplacer\icon-<h>.ico` contains exactly that data and desktop.ini contains `IconResource=.iconreplacer\icon-<h>.ico,0`
+
+#### Scenario: Re-applying a different ICO changes the referenced file name
+- **WHEN** different ICO data is applied to a folder that already has a stored icon
+- **THEN** desktop.ini references a new `icon-<h>.ico` name and the previous icon file is removed
 
 #### Scenario: Folder moved
 - **WHEN** a folder with an applied ICO icon is moved to another location
@@ -39,7 +43,7 @@ When the system changes icon keys, it SHALL keep all other sections, keys and va
 - **THEN** both are still present with unchanged values after the apply
 
 ### Requirement: Undo restores the exact previous state
-Before every change, the system SHALL record the folder's previous state: the desktop.ini bytes or their absence, the desktop.ini and folder attributes, and the previous stored icon or its absence. It SHALL keep this record in `.iconreplacer\history.json`, bounded to the 10 most recent changes. Undo SHALL restore the most recent record exactly and remove it.
+Before every change, the system SHALL record the folder's previous state: the desktop.ini bytes or their absence, the desktop.ini and folder attributes, and the names and bytes of the stored icon files. It SHALL keep this record in `.iconreplacer\history.json`, bounded to the 10 most recent changes. Undo SHALL restore the most recent record exactly and remove it.
 
 #### Scenario: Undo after first apply
 - **WHEN** an icon is applied to a folder and then undone
@@ -47,7 +51,7 @@ Before every change, the system SHALL record the folder's previous state: the de
 
 #### Scenario: Undo of a second apply
 - **WHEN** two icons are applied in turn and the change is undone once
-- **THEN** the folder shows the first icon again with the same desktop.ini bytes and the same stored icon bytes as after the first apply
+- **THEN** the folder shows the first icon again, with the same desktop.ini bytes and the same stored icon file name and bytes as after the first apply
 
 #### Scenario: Nothing to undo
 - **WHEN** undo is requested on a folder without history
@@ -95,7 +99,7 @@ Applying the same icon again to a folder SHALL leave desktop.ini and the stored 
 
 #### Scenario: Apply twice
 - **WHEN** the same icon is applied twice to a folder
-- **THEN** desktop.ini contains a single `IconResource` line and its bytes equal those after the first apply
+- **THEN** desktop.ini contains a single `IconResource` line, its bytes equal those after the first apply, and the stored icon keeps the same file name
 
 ### Requirement: No elevation and Explorer refresh
 The system SHALL never request elevation and SHALL never modify the registry, restart Explorer or clear the icon cache. After each folder change it SHALL notify the shell that the folder was updated.
