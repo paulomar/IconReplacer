@@ -9,10 +9,11 @@ constructed on the GUI thread). Notifications are coalesced.
 from __future__ import annotations
 
 import logging
+import queue
 import threading
+import time
 from collections import OrderedDict
 from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QByteArray, QObject, QRectF, Qt, Signal
@@ -37,7 +38,9 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 DECODED_LRU = 512
-_POOL: ThreadPoolExecutor | None = None
+BACKOFF_START = 30.0
+BACKOFF_MAX = 600.0
+_POOL: _Pool | None = None
 _POOL_LOCK = threading.Lock()
 _DISPATCHER: _Dispatcher | None = None
 
@@ -69,12 +72,56 @@ def dispatcher() -> _Dispatcher:
         return _DISPATCHER
 
 
-def pool() -> ThreadPoolExecutor:
+class _Pool:
+    """Tiny pool of daemon threads: never blocks interpreter exit or shutdown."""
+
+    def __init__(self, workers: int = 4) -> None:
+        self._queue: queue.SimpleQueue[Callable[[], None] | None] = queue.SimpleQueue()
+        self._closed = False
+        self._workers = workers
+        for i in range(workers):
+            threading.Thread(target=self._run, name=f"iconreplacer-src-{i}", daemon=True).start()
+
+    def submit(self, fn: Callable[[], None]) -> None:
+        if not self._closed:
+            self._queue.put(fn)
+
+    def _run(self) -> None:
+        while True:
+            fn = self._queue.get()
+            if fn is None or self._closed:
+                return
+            try:
+                fn()
+            except Exception:
+                log.exception("worker task failed")
+
+    def shutdown(self) -> None:
+        """Cancel queued work; running tasks are abandoned (daemon threads), not awaited."""
+        self._closed = True
+        try:
+            while True:
+                self._queue.get_nowait()
+        except queue.Empty:
+            pass
+        for _ in range(self._workers):
+            self._queue.put(None)
+
+
+def pool() -> _Pool:
     global _POOL
     with _POOL_LOCK:
         if _POOL is None:
-            _POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="iconreplacer-src")
+            _POOL = _Pool()
         return _POOL
+
+
+def shutdown_pool() -> None:
+    global _POOL
+    with _POOL_LOCK:
+        current, _POOL = _POOL, None
+    if current is not None:
+        current.shutdown()
 
 
 def placeholder(size: int) -> QImage:
@@ -132,7 +179,9 @@ class ExternalSourceBase:
         self._cache = DiskCache(cache_name or info.id)
         self._lru: OrderedDict[tuple[str, int], QImage] = OrderedDict()
         self._inflight: set[str] = set()
-        self._failed: set[str] = set()
+        self._backoff: dict[str, tuple[float, float]] = {}  # id -> (retry_at, delay)
+        self._clock: Callable[[], float] = time.monotonic
+        self._closed = False
         self._started = False
         self._gen = 0
         self._notify_pending = False
@@ -155,7 +204,7 @@ class ExternalSourceBase:
                 self._lru.move_to_end(key)
                 return cached
             known = self._by_id.get(entry.id)
-            failed = entry.id in self._failed
+            failed = self._backing_off(entry.id)
         if known is None or failed:
             return placeholder(size)
         data = self._cached_bytes(known)
@@ -163,8 +212,7 @@ class ExternalSourceBase:
             try:
                 image = decode_to_square(data, size, known.name)
             except ConversionError:
-                with self._lock:
-                    self._failed.add(known.id)
+                self._fail(known.id)
                 return placeholder(size)
             with self._lock:
                 self._lru[key] = image
@@ -193,6 +241,7 @@ class ExternalSourceBase:
         return unsubscribe
 
     def refresh(self) -> None:
+        self._reset_backoff()
         self._started = True
         self._submit(lambda: self._refresh_task(force=True))
 
@@ -201,13 +250,44 @@ class ExternalSourceBase:
         if allowed == self._http.network_allowed:
             return
         self._http.network_allowed = allowed
+        self._reset_backoff()
         if allowed:
-            with self._lock:
-                self._failed.clear()
             self.refresh()
         else:
             self._gen += 1
             self._set_state(SourceState.OFFLINE, None)
+
+    def close(self) -> None:
+        """Stop this source: pending work is skipped, late results are dropped silently.
+
+        Does not wait for in-flight requests.
+        """
+        with self._lock:
+            self._closed = True
+            self._subs.clear()
+            self._inflight.clear()
+
+    shutdown = close
+
+    # -- failure backoff ------------------------------------------------------
+    def _backing_off(self, entry_id: str) -> bool:
+        with self._lock:
+            item = self._backoff.get(entry_id)
+            return item is not None and self._clock() < item[0]
+
+    def _fail(self, entry_id: str) -> None:
+        """Record a failure: retry no earlier than 30 s, doubling up to 10 min."""
+        with self._lock:
+            prev = self._backoff.get(entry_id)
+            delay = BACKOFF_START if prev is None else min(prev[1] * 2, BACKOFF_MAX)
+            self._backoff[entry_id] = (self._clock() + delay, delay)
+
+    def _reset_backoff(self, entry_id: str | None = None) -> None:
+        with self._lock:
+            if entry_id is None:
+                self._backoff.clear()
+            else:
+                self._backoff.pop(entry_id, None)
 
     # -- IconBytesProvider --------------------------------------------------
     def fetch_bytes(self, entry: IconEntry) -> bytes:
@@ -254,7 +334,12 @@ class ExternalSourceBase:
             self._submit(lambda: self._refresh_task(force=False))
 
     def _submit(self, fn: Callable[[], None]) -> None:
+        if self._closed:
+            return
+
         def guarded() -> None:
+            if self._closed:
+                return
             try:
                 fn()
             except Exception as exc:
@@ -270,17 +355,21 @@ class ExternalSourceBase:
             if entry.id in self._inflight:
                 return
             self._inflight.add(entry.id)
+        if self._backing_off(entry.id):
+            with self._lock:
+                self._inflight.discard(entry.id)
+            return
 
         def task() -> None:
             ok = False
             try:
                 self._get_bytes(entry)
                 ok = True
+                self._reset_backoff(entry.id)
             except (OSError, ValueError) as exc:
                 log.debug("fetch failed for %s: %s", entry.id, exc)
                 if not isinstance(exc, OfflineError):
-                    with self._lock:
-                        self._failed.add(entry.id)
+                    self._fail(entry.id)
             finally:
                 with self._lock:
                     self._inflight.discard(entry.id)
@@ -291,7 +380,7 @@ class ExternalSourceBase:
 
     def _apply_entries(self, entries: Sequence[IconEntry], gen: int | None = None) -> bool:
         with self._lock:
-            if gen is not None and gen != self._gen:
+            if self._closed or (gen is not None and gen != self._gen):
                 return False
             self._entries = tuple(entries)
             self._by_id = {e.id: e for e in self._entries}
@@ -300,6 +389,8 @@ class ExternalSourceBase:
 
     def _set_state(self, state: SourceState, error: str | None) -> None:
         with self._lock:
+            if self._closed:
+                return
             changed = state != self._state or error != self._error
             self._state = state
             self._error = error
@@ -311,7 +402,7 @@ class ExternalSourceBase:
 
     def _notify(self) -> None:
         with self._lock:
-            if self._notify_pending:
+            if self._closed or self._notify_pending:
                 return
             self._notify_pending = True
         self._dispatcher.post(self._deliver)
@@ -319,7 +410,7 @@ class ExternalSourceBase:
     def _deliver(self) -> None:
         with self._lock:
             self._notify_pending = False
-            subs = list(self._subs)
+            subs = [] if self._closed else list(self._subs)
         for cb in subs:
             try:
                 cb()

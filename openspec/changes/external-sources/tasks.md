@@ -14,6 +14,11 @@
 - [x] 2.4 Add `build_external_sources`, reference parsing and local-folder helpers in `catalog/external.py`; verify with `tests/test_external_build.py`
 - [x] 2.5 Add offline behavior tests across sources and the `network` marker with optional live smoke tests; verify with `uv run pytest -q` (smoke skipped by default)
 
-## 3. Wrap-up
+## 3. Resilience
 
-- [x] 3.1 Run `uv run ruff check`, `uv run ruff format --check`, `uv run pytest -q` and `openspec validate external-sources --strict`; all pass
+- [x] 3.1 Add per-entry exponential backoff (30 s to 10 min, injectable clock, reset on success/refresh/network toggle); verify with `tests/test_external_resilience.py` (one transport call until the backoff expires)
+- [x] 3.2 Add daemon worker pool, `close()`/`shutdown()` and `external.shutdown_all()`; verify with `tests/test_external_resilience.py` (shutdown under 0.5 s with a blocked transport, late results dropped)
+
+## 4. Wrap-up
+
+- [x] 4.1 Run `uv run ruff check`, `uv run ruff format --check`, `uv run pytest -q` and `openspec validate external-sources --strict`; all pass

@@ -262,6 +262,8 @@ class IconifySource(ExternalSourceBase):
         with self._lock:
             if entry.id in self._inflight:
                 return
+            if self._backing_off(entry.id):
+                return
             self._inflight.add(entry.id)
             self._pending.append(entry)
             if self._flushing:
@@ -288,21 +290,24 @@ class IconifySource(ExternalSourceBase):
                     chunk = items[i : i + BATCH_SIZE]
                     try:
                         svgs = self._fetch_batch(prefix, [self._split(e)[1] for e in chunk])
-                    except (NetError, ValueError, KeyError, TypeError) as exc:
-                        self._finish(chunk, ok=False, transient=isinstance(exc, NetError))
+                    except (NetError, ValueError, KeyError, TypeError):
+                        self._finish(chunk, ok=False)
                         continue
                     done = [e for e in chunk if self._split(e)[1] in svgs]
                     self._finish(done, ok=True)
                     self._finish([e for e in chunk if e not in done], ok=False)
 
-    def _finish(self, entries: Sequence[IconEntry], *, ok: bool, transient: bool = False) -> None:
+    def _finish(self, entries: Sequence[IconEntry], *, ok: bool) -> None:
         if not entries:
             return
         with self._lock:
             for e in entries:
                 self._inflight.discard(e.id)
-                if not ok and not transient:
-                    self._failed.add(e.id)
+        for e in entries:
+            if ok:
+                self._reset_backoff(e.id)
+            else:
+                self._fail(e.id)
         if ok:
             self._notify()
 

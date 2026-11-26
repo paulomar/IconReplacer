@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from iconreplacer.catalog.external_base import shutdown_pool
 from iconreplacer.catalog.net import Response, TransportError
 from iconreplacer.core import paths
 
@@ -20,12 +21,21 @@ def fixture_json(name: str) -> Any:
     return json.loads((FIXTURES / name).read_text("utf-8"))
 
 
+def quiesce() -> None:
+    """Stop the worker pool and wait for running tasks so none outlive the test's home."""
+    shutdown_pool()
+    for th in threading.enumerate():
+        if th.name.startswith("iconreplacer-src-"):
+            th.join(3)
+
+
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     """Isolated ICONREPLACER_HOME so caches never leave tmp_path."""
     monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "home"))
     paths.reset_cache()
     yield tmp_path / "home"
+    quiesce()
     paths.reset_cache()
 
 

@@ -30,6 +30,24 @@ External sources SHALL never block the caller: listing entries returns the curre
 - **WHEN** a background fetch completes
 - **THEN** every subscriber callback runs on the GUI thread
 
+### Requirement: Failure backoff
+After a failed fetch of an icon's image, the source SHALL NOT request that icon again until a backoff period has elapsed, starting at 30 seconds and doubling after each further failure up to 10 minutes. While backing off, rendering that icon SHALL return the placeholder without any request. At most one request per icon SHALL be in flight. The backoff SHALL be cleared by a success, a refresh, or a change of the network-allowed setting.
+
+#### Scenario: Repeated rendering after a failure
+- **WHEN** an icon fetch fails and the icon is rendered many times before the backoff expires
+- **THEN** exactly one request has been made, and a new request is made only after the backoff has expired
+
+#### Scenario: Backoff reset
+- **WHEN** a refresh is requested or the network setting is toggled while an icon is backing off
+- **THEN** the icon may be fetched again immediately
+
+### Requirement: Fast shutdown
+Sources and the module providing them SHALL offer a shutdown that cancels queued work and returns promptly without waiting for requests that are in flight. Background workers SHALL NOT keep the process alive. Results that arrive after a source was closed SHALL be dropped silently, without notifying subscribers.
+
+#### Scenario: Shutdown during a blocked request
+- **WHEN** shutdown is called while a network request is blocked
+- **THEN** it returns in well under one second, and no subscriber is notified when the request finishes later
+
 ### Requirement: Disk cache
 Downloaded files and indexes SHALL be cached under the application cache directory of the source. Cache file names SHALL be derived from a hash and never from remote paths. Indexes SHALL be considered fresh for 24 hours; a stale index SHALL be served immediately and refreshed in the background. When the network is not allowed, or a refresh fails, cached data SHALL be served.
 

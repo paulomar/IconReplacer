@@ -98,7 +98,6 @@ class LocalFolderSource(ExternalSourceBase):
 
     def _refresh_task(self, force: bool) -> None:
         with self._lock:
-            self._failed.clear()
             self._mem.clear()
             self._lru.clear()
         self._set_state(SourceState.LOADING, None)

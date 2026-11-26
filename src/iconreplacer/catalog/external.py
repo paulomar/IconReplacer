@@ -6,7 +6,7 @@ import os
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
-from iconreplacer.catalog.external_base import ExternalSourceBase
+from iconreplacer.catalog.external_base import ExternalSourceBase, shutdown_pool
 from iconreplacer.catalog.github_source import GitHubRepoSource, parse_repo, source_id_for
 from iconreplacer.catalog.iconify_source import default_iconify_sources
 from iconreplacer.catalog.local_source import LocalFolderSource, local_source_id
@@ -22,6 +22,7 @@ __all__ = [
     "local_source_id",
     "parse_github_repo",
     "remove_local_folder",
+    "shutdown_all",
 ]
 
 
@@ -91,3 +92,13 @@ def remove_local_folder(sources: list[ExternalSourceBase], path_or_id: Path | st
             sources.remove(s)
             return True
     return False
+
+
+def shutdown_all(sources: Iterable[ExternalSourceBase] = ()) -> None:
+    """Fast shutdown: close ``sources``, cancel queued work, never wait for in-flight HTTP.
+
+    Worker threads are daemons, so a request blocked on the network cannot delay exit.
+    """
+    for s in sources:
+        s.close()
+    shutdown_pool()
