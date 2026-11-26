@@ -2,11 +2,11 @@
 
 ## 1. Win32 bindings
 
-- [ ] 1.1 Implement `services/win32_shell.py` (attributes, SHGetSetFolderCustomSettings, SHChangeNotify, explicit argtypes/restype, OSError on failure) and verify `tests/test_folder_icon_spike.py` passes: a relative and a `%SystemRoot%` IconResource are written verbatim and the Hidden|System/ReadOnly attributes are set on tmp_path folders
+- [x] 1.1 Implement `services/win32_shell.py` (attributes, SHGetSetFolderCustomSettings, SHChangeNotify, explicit argtypes/restype, OSError on failure) and verify `tests/test_folder_icon_spike.py` passes: a relative and a `%SystemRoot%` IconResource are written verbatim and the Hidden|System/ReadOnly attributes are set on tmp_path folders
 
 ## 2. Safety checks
 
-- [ ] 2.1 Implement `services/folder_safety.py` and verify `tests/test_folder_icon_safety.py` passes for every refusal rule (missing, file, drive root, Windows/Program Files/ProgramData via monkeypatched env vars and `..` paths, profile root vs subfolder, junction, unwritable) and for an allowed folder
+- [x] 2.1 Implement `services/folder_safety.py` and verify `tests/test_folder_icon_safety.py` passes for every refusal rule (missing, file, drive root, Windows/Program Files/ProgramData via monkeypatched env vars and `..` paths, profile root vs subfolder, junction, unwritable) and for an allowed folder
 
 ## 3. desktop.ini editor and history
 
