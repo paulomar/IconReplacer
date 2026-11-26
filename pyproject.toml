@@ -15,6 +15,7 @@ iconreplacer = "iconreplacer.__main__:main"
 
 [dependency-groups]
 dev = [
+    "pyinstaller>=6.22.3",
     "pytest>=9.2.0",
     "pytest-qt>=4.5.0",
     "ruff>=0.17.6",
@@ -34,7 +35,11 @@ packages = ["src/iconreplacer"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 qt_api = "pyside6"
-markers = ["registry: touches the real HKCU IconReplacer verb key (R1, snapshot + verified rollback)"]
+markers = [
+    "registry: touches the real HKCU IconReplacer verb key (R1, snapshot + verified rollback)",
+    "build: slow end-to-end PyInstaller release build (skipped unless -m build)",
+]
+addopts = "-m 'not build'"
 
 [tool.ruff]
 line-length = 100
