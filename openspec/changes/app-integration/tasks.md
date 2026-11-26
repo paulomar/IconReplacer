@@ -30,9 +30,9 @@
 
 - [x] 6.1 About notices for converter/system data and the third-party source license caveat (verify: About test)
 - [x] 6.2 Regenerate `iconreplacer_en.ts` and extend i18n checks for new strings (verify: `test_i18n.py`)
-- [ ] 6.3 `tools/screenshots.py` with real system icons, non-existent demo targets and the simulated service; regenerate and review `docs/screenshots` (verify: images reviewed, no folder written)
-- [ ] 6.4 README: status, Explorer menu registration (`--register` or Settings) (verify: read through)
+- [x] 6.3 `tools/screenshots.py` with real system icons, non-existent demo targets and the simulated service; regenerate and review `docs/screenshots` (verify: images reviewed, no folder written)
+- [x] 6.4 README: status, Explorer menu registration (`--register` or Settings) (verify: read through)
 
 ## 7. Integration
 
-- [ ] 7.1 `uv run pytest -q`, `uv run ruff check`, `uv run ruff format --check`, `openspec validate app-integration --strict` all pass
+- [x] 7.1 `uv run pytest -q`, `uv run ruff check`, `uv run ruff format --check`, `openspec validate app-integration --strict` all pass

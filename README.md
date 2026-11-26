@@ -5,8 +5,20 @@ the decades-old *Customize > Change Icon* dialog. Right-click a folder, choose
 **Replace Icon**, then browse icons by source and category, preview them from 16
 to 256 px and apply.
 
-> Status: **UI prototype (validated)**. The data is mocked, and actions are simulated: nothing on
-> your system is modified.
+> Status: **working application (pre-release)**. Icons come from the Windows system libraries
+> (referenced in place), and Apply / Undo / Restore default really change the target folders.
+> Online, GitHub and local-folder sources are coming next.
+
+## How it works
+
+- Pick target folders with Explorer's **Replace Icon** entry, `--folder`, or **Choose folders…**.
+- Select an icon, optionally **Compose on folder base** with a tint, then **Apply**.
+- IconReplacer writes `desktop.ini` (and, for composed or converted icons, a generated
+  `.iconreplacer\icon-<hash>.ico` inside the folder, so the icon survives moving the folder).
+  The previous state is saved, so **Undo** restores it exactly; **Restore default** removes the
+  custom icon.
+- Batches ask for confirmation. Failures are listed per folder with the reason. System, program
+  and profile-root folders, drive roots and links are always refused. No admin rights are needed.
 
 ## Screenshots
 
@@ -14,9 +26,12 @@ to 256 px and apply.
 |---|---|
 | ![Main window, light](docs/screenshots/main-light.png) | ![Main window, dark](docs/screenshots/main-dark.png) |
 | ![Sources panel shown](docs/screenshots/sources-panel-dark.png) | ![Composition, batch targets and source indicator](docs/screenshots/preview-compose-batch-source-indicator-dark.png) |
-| ![Search and category filter](docs/screenshots/search-filter-dark.png) | ![Settings with network off](docs/screenshots/settings-network-off-dark.png) |
+| ![Search and category filter](docs/screenshots/search-filter-dark.png) | ![Settings with network off and Explorer integration](docs/screenshots/settings-network-off-dark.png) |
+| ![Apply result](docs/screenshots/apply-result-dark.png) | ![Stale Explorer registration banner](docs/screenshots/stale-banner-dark.png) |
 
-Regenerate the screenshots with `uv run python tools/screenshots.py`.
+Regenerate the screenshots with `uv run python tools/screenshots.py`. The tool reads the real
+system icons but uses demo target paths, a simulated folder service and an in-memory registry:
+nothing on the system is modified.
 
 ## Requirements (development)
 
@@ -30,6 +45,28 @@ uv sync
 uv run iconreplacer --folder C:\path\to\folder
 uv run iconreplacer --version
 ```
+
+Without `--folder`, use **Choose folders…** in the window (pick repeatedly to add several).
+
+### Explorer "Replace Icon" menu
+
+Register the per-user folder context-menu entry (only `HKCU\Software\Classes\Directory\shell\IconReplacer`
+is written; no admin rights):
+
+```powershell
+uv run iconreplacer --register     # or Settings > Explorer integration > Register
+uv run iconreplacer --status
+uv run iconreplacer --unregister
+```
+
+On Windows 11 the entry appears under **Show more options**. Selecting several folders opens a
+single window with all of them. If the portable folder is moved, the app shows a
+**Fix Explorer integration** banner that re-registers the new location.
+
+### Demo mode
+
+`ICONREPLACER_DEMO=1` starts the app with generated demo sources, simulated actions and an
+in-memory registry (used by tests and for UI work).
 
 ## Test
 

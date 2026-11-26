@@ -64,7 +64,7 @@ class AboutDialog(QDialog):
         sources = self.tr("Third-party icon sources keep their own licenses.")
         paragraphs = "".join(f"<p>{t}</p>" for t in (disclaimer, converter, system_data, sources))
         self.notices.setHtml(f"<table cellpadding='3'>{rows}</table>{paragraphs}")
-        self.notices.setMinimumHeight(190)
+        self.notices.setMinimumHeight(290)
         lay.addWidget(self.notices)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
