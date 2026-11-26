@@ -4,9 +4,9 @@ Format: MAJOR.MINOR.PATCH.BUILD. BUILD increases by one for every change merged
 into ``main`` and never resets. Edit only through ``tools/bump_version.py``.
 """
 
-VERSION: tuple[int, int, int, int] = (0, 4, 0, 6)
+VERSION: tuple[int, int, int, int] = (0, 5, 0, 7)
 
-__version__ = "0.4.0.6"
+__version__ = "0.5.0.7"
 
 MAJOR, MINOR, PATCH, BUILD = VERSION
 SHORT_VERSION = f"{MAJOR}.{MINOR}.{PATCH}"
