@@ -6,7 +6,7 @@ import hashlib
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QRect, Qt, QTimer
+from PySide6.QtCore import QByteArray, QRect, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPalette
 from PySide6.QtWidgets import (
     QFrame,
@@ -40,6 +40,16 @@ from iconreplacer.version import PRODUCT_NAME
 MIN_W, MIN_H = 800, 560
 DEFAULT_W, DEFAULT_H = 1040, 760
 DEFAULT_SIDEBAR_W = 250
+MIN_VISIBLE_W, MIN_VISIBLE_H = 120, 60
+
+
+def geometry_fits(frame: QRect, screens: Sequence[QRect]) -> bool:
+    """True if enough of the window frame lies on some screen to be reachable."""
+    for screen in screens:
+        inter = frame.intersected(screen)
+        if inter.width() >= MIN_VISIBLE_W and inter.height() >= MIN_VISIBLE_H:
+            return True
+    return False
 
 
 class MainWindow(QMainWindow):
@@ -62,6 +72,13 @@ class MainWindow(QMainWindow):
         self._sidebar_width = DEFAULT_SIDEBAR_W
         self._grown_by = 0
         self._source_id: str | None = None
+
+        # restore persisted source state before the views are built from the registry
+        for folder in settings.get("sources.local_folders", []) or []:
+            self._register_local(Path(folder))
+        for sid in settings.get("sources.disabled", []) or []:
+            if sid in {s.info.id for s in registry.sources()}:
+                registry.set_enabled(sid, False)
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
@@ -172,6 +189,42 @@ class MainWindow(QMainWindow):
         self.grid.set_entries(registry.all_entries())
         self._refresh_availability()
         self._update_status()
+        self._restore_view_state()
+
+    # -- persisted view state ----------------------------------------------------
+    def _restore_view_state(self) -> None:
+        thumb = int(self.settings.get("ui.thumb_size", DEFAULT_THUMB) or DEFAULT_THUMB)
+        self.size_slider.setValue(max(MIN_THUMB, min(MAX_THUMB, thumb)))
+        restored = self._restore_geometry()
+        if self.settings.get("ui.sources_visible", False):
+            self.set_sources_visible(True, resize=not restored)
+
+    def _restore_geometry(self) -> bool:
+        encoded = self.settings.get("ui.window_geometry")
+        if not encoded:
+            return False
+        try:
+            data = QByteArray.fromBase64(str(encoded).encode("ascii"))
+        except (UnicodeEncodeError, ValueError):
+            return False
+        default = self.geometry()
+        if self.restoreGeometry(data):
+            screens = [s.availableGeometry() for s in QGuiApplication.screens()]
+            if (
+                self.isMaximized()
+                or self.isFullScreen()
+                or geometry_fits(self.frameGeometry(), screens)
+            ):
+                return True
+        self.setWindowState(Qt.WindowState.WindowNoState)
+        self.setGeometry(default)
+        return False
+
+    def closeEvent(self, event) -> None:
+        encoded = bytes(self.saveGeometry().toBase64().data()).decode("ascii")
+        self.settings.set("ui.window_geometry", encoded)
+        self.settings.set("ui.sources_visible", self.sources_visible())
+        super().closeEvent(event)
 
     # -- rendering -------------------------------------------------------------
     def _render(self, entry: IconEntry, size: int):
@@ -195,8 +248,12 @@ class MainWindow(QMainWindow):
     def sources_visible(self) -> bool:
         return not self.sidebar.isHidden()
 
-    def set_sources_visible(self, on: bool) -> None:
-        """Show/hide the sources sidebar, growing/shrinking a normal window to fit it."""
+    def set_sources_visible(self, on: bool, resize: bool = True) -> None:
+        """Show/hide the sources sidebar, growing/shrinking a normal window to fit it.
+
+        With resize=False (restoring a saved geometry that already includes the sidebar)
+        the window keeps its size.
+        """
         if on == self.sources_visible():
             return
         if self.sources_btn.isChecked() != on:
@@ -207,7 +264,11 @@ class MainWindow(QMainWindow):
         if on:
             sizes = self.splitter.sizes()
             grid_w, preview_w = sizes[1], sizes[2]
-            if resizable:
+            if not resize:
+                self._grown_by = (
+                    self._sidebar_width + self.splitter.handleWidth() if resizable else 0
+                )
+            elif resizable:
                 avail = self._available_geometry()
                 geo = self.geometry()
                 extra = self._sidebar_width + self.splitter.handleWidth()
@@ -226,6 +287,7 @@ class MainWindow(QMainWindow):
                 geo = self.geometry()
                 self.resize(max(self.minimumWidth(), geo.width() - self._grown_by), geo.height())
             self._grown_by = 0
+        self.settings.set("ui.sources_visible", on)
         self._update_pill()
 
     def _on_source(self, source_id: str | None) -> None:
@@ -243,6 +305,7 @@ class MainWindow(QMainWindow):
     def _on_size(self, value: int) -> None:
         self.grid.set_thumb_size(value)
         self.size_value.setText(f"{value}px")
+        self.settings.set("ui.thumb_size", value)
 
     def _on_entry(self, entry: IconEntry | None) -> None:
         name = self.registry.info(entry.source_id).name if entry else ""
@@ -318,15 +381,23 @@ class MainWindow(QMainWindow):
         dlg.open()
         return dlg
 
-    def add_local_folder(self, path: Path) -> None:
-        """Prototype: registers a mock local source for the chosen folder."""
+    def _register_local(self, path: Path) -> bool:
+        """Prototype: registers a mock local source for the folder. False if already known."""
         sid = "local-" + hashlib.blake2s(str(path).lower().encode(), digest_size=4).hexdigest()
         if sid in {s.info.id for s in self.registry.sources()}:
-            return
+            return False
         info = SourceInfo(sid, path.name or str(path), str(path), Section.LOCAL, "User provided")
         self.registry.add(
             MockIconSource(info, ("Folders", "Media", "Documents"), 24, IconKind.FULL, str(path))
         )
+        return True
+
+    def add_local_folder(self, path: Path) -> None:
+        if not self._register_local(path):
+            return
+        folders = list(self.settings.get("sources.local_folders", []) or [])
+        if str(path) not in folders:
+            self.settings.set("sources.local_folders", [*folders, str(path)])
         self.sidebar.rebuild()
         self.settings_view.rebuild_sources()
         self.grid.set_entries(self.registry.all_entries())

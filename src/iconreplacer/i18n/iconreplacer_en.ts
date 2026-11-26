@@ -105,7 +105,7 @@
 <context>
     <name>CategoryChips</name>
     <message>
-        <location filename="../ui/sidebar.py" line="174"/>
+        <location filename="../ui/sidebar.py" line="168"/>
         <source>All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -121,42 +121,42 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../ui/main_window.py" line="81"/>
+        <location filename="../ui/main_window.py" line="98"/>
         <source>Sources</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="84"/>
+        <location filename="../ui/main_window.py" line="101"/>
         <source>Show or hide the sources panel (Ctrl+B)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="91"/>
+        <location filename="../ui/main_window.py" line="108"/>
         <source>Search name, tag or resource ID…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="94"/>
+        <location filename="../ui/main_window.py" line="111"/>
         <source>Size</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="138"/>
+        <location filename="../ui/main_window.py" line="155"/>
         <source>Browse</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="142"/>
+        <location filename="../ui/main_window.py" line="159"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="145"/>
+        <location filename="../ui/main_window.py" line="162"/>
         <source>About</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/main_window.py" line="268"/>
+        <location filename="../ui/main_window.py" line="325"/>
         <source>%n icon(s) shown</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -164,7 +164,7 @@
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/main_window.py" line="271"/>
+        <location filename="../ui/main_window.py" line="328"/>
         <source>%n folder(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -172,32 +172,32 @@
         </translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="274"/>
+        <location filename="../ui/main_window.py" line="331"/>
         <source>No target folder.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="286"/>
+        <location filename="../ui/main_window.py" line="343"/>
         <source>composed on folder base</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="286"/>
+        <location filename="../ui/main_window.py" line="343"/>
         <source>as-is</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="289"/>
+        <location filename="../ui/main_window.py" line="346"/>
         <source>Simulation: “%1” would be applied (%2) to %3. Nothing was changed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="301"/>
+        <location filename="../ui/main_window.py" line="358"/>
         <source>Simulation: the last change would be undone on %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="311"/>
+        <location filename="../ui/main_window.py" line="368"/>
         <source>Simulation: the default icon would be restored on %1.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -205,57 +205,57 @@
 <context>
     <name>PreviewPanel</name>
     <message>
-        <location filename="../ui/preview_panel.py" line="62"/>
+        <location filename="../ui/preview_panel.py" line="63"/>
         <source>Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="80"/>
+        <location filename="../ui/preview_panel.py" line="81"/>
         <source>Compose on folder base</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="88"/>
+        <location filename="../ui/preview_panel.py" line="89"/>
         <source>Tint</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="102"/>
+        <location filename="../ui/preview_panel.py" line="103"/>
         <source>Custom color</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="127"/>
+        <location filename="../ui/preview_panel.py" line="128"/>
         <source>Name</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="128"/>
+        <location filename="../ui/preview_panel.py" line="129"/>
         <source>Source</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="129"/>
+        <location filename="../ui/preview_panel.py" line="130"/>
         <source>Identifier</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="130"/>
+        <location filename="../ui/preview_panel.py" line="131"/>
         <source>Categories</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="131"/>
+        <location filename="../ui/preview_panel.py" line="132"/>
         <source>License</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="135"/>
+        <location filename="../ui/preview_panel.py" line="136"/>
         <source>Select an icon to preview it</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/preview_panel.py" line="208"/>
+        <location filename="../ui/preview_panel.py" line="212"/>
         <source>Folder tint</source>
         <translation type="unfinished"></translation>
     </message>
@@ -326,37 +326,47 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../ui/settings_view.py" line="101"/>
+        <source>System default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../ui/settings_view.py" line="107"/>
+        <source>Restart IconReplacer to apply the language</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/settings_view.py" line="112"/>
         <source>System</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_view.py" line="108"/>
+        <location filename="../ui/settings_view.py" line="113"/>
         <source>Light</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_view.py" line="109"/>
+        <location filename="../ui/settings_view.py" line="114"/>
         <source>Dark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_view.py" line="113"/>
+        <location filename="../ui/settings_view.py" line="118"/>
         <source>Language</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_view.py" line="114"/>
+        <location filename="../ui/settings_view.py" line="120"/>
         <source>Theme</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_view.py" line="169"/>
+        <location filename="../ui/settings_view.py" line="175"/>
         <source>Unavailable: network access is off</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_view.py" line="190"/>
+        <location filename="../ui/settings_view.py" line="207"/>
         <source>Choose an icon folder</source>
         <translation type="unfinished"></translation>
     </message>
@@ -377,7 +387,7 @@
 <context>
     <name>SourceSidebar</name>
     <message>
-        <location filename="../ui/sidebar.py" line="107"/>
+        <location filename="../ui/sidebar.py" line="106"/>
         <source>All sources</source>
         <translation type="unfinished"></translation>
     </message>
